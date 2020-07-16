@@ -470,8 +470,8 @@ def main():
     # get_number_of_dev_subtrack_by_date(cnx.cursor())
     # get_tech_by_start_date(cnx.cursor())
     # get_dev_track_info(cnx.cursor())
-    get_detailed_requirements(cnx.cursor())
     # get_challenge_prz_and_avg_score(cnx.cursor())
+    get_detailed_requirements(cnx.cursor())
     get_challenge_basic_info(cnx.cursor())
     cnx.close()
 
