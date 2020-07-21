@@ -18,9 +18,19 @@ from transformers import (
 from transformers.modeling_tf_utils import (
     TFSequenceClassificationLoss,
     get_initializer,
+    shape_list
 )
 
 DUMMY_META = tf.cast(tf.constant(np.random.randint(1, 1000, (3, 4))), tf.float64)
+
+def custom_loss_fn(y_true, y_pred):
+    """ A custom loss computation for debugging"""
+    print('y_true: ', tf.cast(y_true, tf.int32))
+    print('y_pred: ', tf.cast(y_pred, tf.float32))
+    # one_hot_positions = tf.one_hot(y_true, shape_list(y_pred)[1])
+    one_hot_positions = tf.one_hot(tf.cast(y_true, tf.int32), shape_list(y_pred)[1])
+    loss = tf.nn.softmax_cross_entropy_with_logits(labels=one_hot_positions, logits=y_pred)
+    return tf.reduce_mean(loss)
 
 def build_tcpm_model_distilbert(distilbert_model: TFDistilBertModel, config: AutoConfig):
     """ Build TopCoder Pricing Model(TCPM) using tensorflow functional api
@@ -37,7 +47,8 @@ def build_tcpm_model_distilbert(distilbert_model: TFDistilBertModel, config: Aut
         name='fully_connected'
     )
     dropout_layer = tf.keras.layers.Dropout(config.seq_classif_dropout)
-    classification = tf.keras.layers.Dense(num_labels, name='classification')
+    classification = tf.keras.layers.Dense(config.num_labels, name='classification')
+    # softmax_layer = tf.keras.layers.Softmax()
 
     # build (distil)bert model pipeline
     distilbert_input = {k: tf.keras.layers.Input(shape=(512,), dtype=tf.int32, name=k) for k in ('input_ids', 'attention_mask')} # there probably is a better way to get the encoded keys but it works for now
@@ -51,10 +62,11 @@ def build_tcpm_model_distilbert(distilbert_model: TFDistilBertModel, config: Aut
     # continue forward to the fully connected layer
     concat_layer = tf.keras.layers.concatenate([pooled_output, meta_input])
     x = fully_connected_layer(concat_layer)
-    x = dropout_layer(x)
+    # x = dropout_layer(x)
     output = classification(x)
+    # output = softmax_layer(output)
 
-    tcpm_model = tf.keras.Model(inputs=[distil_bert_input, meta_input], outputs=output)
+    tcpm_model = tf.keras.Model(inputs=[distilbert_input, meta_input], outputs=output)
     return tcpm_model
 
 class TCPMDistilBertClassification(TFDistilBertPreTrainedModel, TFSequenceClassificationLoss):
@@ -92,13 +104,13 @@ class TCPMDistilBertClassification(TFDistilBertPreTrainedModel, TFSequenceClassi
         hidden_state = distilbert_output[0] # (bs, seq_len, dim)
 
         # append metadata after the bert output embeddings
-        pooled_output = hidden_state[:, 0] # (bs, dim)
+        pooled_output = hidden_state[:, 0] # (bs, dim) gen sentence embedding == embedding of '[CLS]'
         metadata_output = self.metadata_inputs(metadata_inputs)
         concat_output = tf.keras.layers.concatenate([pooled_output, metadata_output])
 
         # continue forward
         x = self.fully_connected(concat_output)
-        x = self.dropout(x, training=training)
+        # x = self.dropout(x, training=training)
         logits = self.classifier(x)
 
         outputs = (logits,) + distilbert_output[1:] # copy-paste from original impolementation
