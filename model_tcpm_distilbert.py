@@ -3,6 +3,7 @@
 """
 import os
 import json
+import random
 
 from dotenv import load_dotenv
 
@@ -20,8 +21,7 @@ from transformers.modeling_tf_utils import (
     get_initializer,
     shape_list
 )
-
-DUMMY_META = tf.cast(tf.constant(np.random.randint(1, 1000, (3, 4))), tf.float64)
+from transformers.tokenization_utils import BatchEncoding
 
 def custom_loss_fn(y_true, y_pred):
     """ A custom loss computation for debugging"""
@@ -71,6 +71,32 @@ def build_tcpm_model_distilbert(distilbert_model: TFDistilBertModel, config: Aut
 
 class TCPMDistilBertClassification(TFDistilBertPreTrainedModel, TFSequenceClassificationLoss):
     """ Classification model that takes both encoded text and metadata as input."""
+    @property
+    def dummy_inputs(self):
+        """ Overt write the parent class dummy inputs
+            used to build the network
+
+            Returns:
+               {'':} 
+        """
+        meaningful_encoded_digits = random.randint(12, 512)
+        return {
+            'input_ids': tf.constant(
+                np.concatenate(
+                    (
+                        np.random.randint(1, 1000, (3, meaningful_encoded_digits)),
+                        np.zeros((3, 512 - meaningful_encoded_digits))
+                    ), axis=1), dtype=tf.int32),
+            'attention_mask': tf.constant(
+                np.concatenate(
+                    (
+                        np.ones((3, meaningful_encoded_digits)),
+                        np.zeros((3, 512 - meaningful_encoded_digits))
+                    ), axis=1), dtype=tf.int32),
+            'meta_input': tf.constant(np.random.randint(1, 1000, (3, 4)), dtype=tf.float32)
+        }
+
+
     def __init__(self, config, *inputs, **kwargs):
         super().__init__(config, *inputs, **kwargs)
         self.num_labels = config.num_labels
@@ -90,33 +116,68 @@ class TCPMDistilBertClassification(TFDistilBertPreTrainedModel, TFSequenceClassi
             name='classifier'
         )
 
-    def call(self, inputs=None, labels=None, training=False):
+    def call(
+        self,
+        inputs=None,
+        attention_mask=None,
+        head_mask=None,
+        inputs_embeds=None,
+        output_attentions=None,
+        output_hidden_states=None,
+        labels=None,
+        training=False,
+    ):
         """ The inputs has type of shape as follow:
-            ({'input_ids': (512,), 'attention_mask': (512,)}, (4,))
+            ({'input_ids': (512,), 'attention_mask': (512,), 'meta_input': (4,)})
             which are (encoded_text, metadata)
         """
         if isinstance(inputs, (tuple, list)):
-            bert_inputs, metadata_inputs = inputs
-        else:
-            bert_inputs, metadata_inputs = inputs, DUMMY_META
+            labels = inputs[6] if len(inputs) > 6 else labels
+            if len(inputs) > 6:
+                inputs = inputs[:6]
+        elif isinstance(inputs, (dict, BatchEncoding)):
+            labels = inputs.pop('labels', labels)
+            if 'meta_input' not in inputs:
+                raise KeyError(f'You need to include meta_input in the input data to train this model. Keys of input: {list(inputs.keys())}')
+            meta_input = inputs.pop('meta_input')
 
-        distilbert_output = self.distilbert(bert_inputs, training=training)
+        print('Input TCPM call')
+        print(inputs)
+        print(meta_input)
+        print(labels)
+
+        distilbert_output = self.distilbert(
+            inputs,
+            attention_mask=attention_mask,
+            head_mask=head_mask,
+            inputs_embeds=inputs_embeds,
+            output_attentions=output_attentions,
+            output_hidden_states=output_hidden_states,
+            training=training,
+        )
         hidden_state = distilbert_output[0] # (bs, seq_len, dim)
+
+        # print('Get hidden state of distilbert', hidden_state)
 
         # append metadata after the bert output embeddings
         pooled_output = hidden_state[:, 0] # (bs, dim) gen sentence embedding == embedding of '[CLS]'
-        metadata_output = self.metadata_inputs(metadata_inputs)
+        metadata_output = self.metadata_inputs(meta_input)
+        # print('Get meta output', metadata_output)
         concat_output = tf.keras.layers.concatenate([pooled_output, metadata_output])
+        # print('Get concat', concat_output)
 
         # continue forward
         x = self.fully_connected(concat_output)
         # x = self.dropout(x, training=training)
         logits = self.classifier(x)
 
+        # print('logits', logits)
+
         outputs = (logits,) + distilbert_output[1:] # copy-paste from original impolementation
 
         if labels is not None:
             loss = self.compute_loss(labels, logits)
+            # print('get loss', loss)
             outputs = (loss,) + outputs
 
         return outputs # (loss), logits, (hidden_states), (attentions)

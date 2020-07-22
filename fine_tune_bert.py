@@ -38,10 +38,8 @@ load_dotenv()
 TRAIN_BATCH_SIZE = 16
 TEST_BATCH_SIZE = 4
 
-def build_dataset(tokenizer, model_type='hf'):
+def build_dataset(tokenizer):
     """ Build td.data.Dataset out of text and prize range."""
-    if model_type not in ('hf', 'tf'):
-        raise ValueError(f'Model type can only be one of {"hf", "tf"}. Receive "{model_type}".')
     # Load TopCoder data
     tc = TopCoder()
     tc_req = tc.get_filtered_requirements()
@@ -73,40 +71,22 @@ def build_dataset(tokenizer, model_type='hf'):
         req_prz_df['prize_cat'].iloc[i]
         ) for i in range(len(req_prz_df))]
 
-    def gen_hf():
-        """ generator used in `tf.data.Dataset.from_generator`."""
-        for encoded_str, metadata, label in features:
-            yield (encoded_str, metadata), label
-
-    def gen_tf():
+    def gen():
         """ generator used in `tf.data.Dataset.from_generator`."""
         for encoded_str, metadata, label in features:
             yield dict(**encoded_str, meta_input=metadata), label # NOTE: it's import the key if named "meta_input" to match the input_layer's name in the model
 
-    if model_type == 'hf':
-        dataset = tf.data.Dataset.from_generator(
-            gen_hf,
-            (
-                ({k: tf.int32 for k in batched_encoded}, tf.float32),
-                tf.int32
-                ),
-            (
-                ({k: tf.TensorShape([512]) for k in batched_encoded}, tf.TensorShape([4])),
-                tf.TensorShape([])
-                )
-        )
-    else:
-        dataset = tf.data.Dataset.from_generator(
-            gen_tf,
-            (
-                dict(**{k: tf.int32 for k in batched_encoded}, meta_input=tf.float32),
-                tf.int32
-                ),
-            (
-                dict(**{k: tf.TensorShape([512]) for k in batched_encoded}, meta_input=tf.TensorShape([4])),
-                tf.TensorShape([])
-                )
-        )
+    dataset = tf.data.Dataset.from_generator(
+        gen,
+        (
+            dict(**{k: tf.int32 for k in batched_encoded}, meta_input=tf.float32),
+            tf.int32
+            ),
+        (
+            dict(**{k: tf.TensorShape([512]) for k in batched_encoded}, meta_input=tf.TensorShape([4])),
+            tf.TensorShape([])
+            )
+    )
 
     return (
         dataset,
@@ -204,6 +184,33 @@ def finetune_with_tftrainer():
     with open(os.path.join(os.getenv('OUTPUT_DIR'), 'eval_results.json'), 'w') as fwrite:
         json.dump(result, fwrite, indent=4)
 
+def finetune_tcpm_as_tfmodel():
+    """ Fine tune the subclass model as a tf model"""
+    tokenizer = AutoTokenizer.from_pretrained(os.getenv('MODEL_NAME'))
+
+    # Get data for fine-tuning
+    dataset, dataset_size, num_labels = build_dataset(tokenizer)
+
+    config = AutoConfig.from_pretrained(os.getenv('MODEL_NAME'), num_labels=num_labels)
+    model = TCPMDistilBertClassification.from_pretrained(os.getenv('MODEL_NAME'), config=config)
+
+    # shuffle and split train/test tasks manuanly
+    dataset = dataset.shuffle(dataset_size)
+    train_size = int(dataset_size * (4 / 5))
+    # test_size = dataset_size - train_size # didn't use so commented out.
+
+    train_data = dataset.take(train_size).batch(TRAIN_BATCH_SIZE)
+    test_data = dataset.skip(train_size).batch(TEST_BATCH_SIZE)
+
+    optimizer = tf.keras.optimizers.Adam(learning_rate=3e-5)
+    loss = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+    metrics = [tf.keras.metrics.SparseCategoricalCrossentropy(from_logits=True), 'accuracy']
+    model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
+
+    model.fit(train_data, epochs=2)
+    result = model.evaluate(test_data)
+    print(result)
+
 def finetune_tf_function():
     """ Fine tune functional api."""
     tokenizer = AutoTokenizer.from_pretrained(os.getenv('MODEL_NAME'))
@@ -252,4 +259,5 @@ def finetune_tf_function():
 
 if __name__ == "__main__":
     # finetune_with_tftrainer()
-    finetune_tf_function()
+    # finetune_tf_function()
+    finetune_tcpm_as_tfmodel()
