@@ -207,7 +207,7 @@ def finetune_tcpm_as_tfmodel():
     metrics = [tf.keras.metrics.SparseCategoricalCrossentropy(from_logits=True), 'accuracy']
     model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
 
-    model.fit(train_data, epochs=2)
+    model.fit(train_data, epochs=4)
     result = model.evaluate(test_data)
     print(result)
 
