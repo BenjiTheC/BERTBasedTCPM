@@ -242,14 +242,13 @@ def finetune_tf_function():
     model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
 
     # train the model
-    train_history = model.fit(train_data, epochs=2)
+    train_history = model.fit(train_data, epochs=4)
     print('Training finish:')
     pprint(train_history)
     # evaluate the model
-    loss, accuracy = model.evaluate(test_data)
+    result = model.evaluate(test_data)
     print('Test result:')
-    print(f'Loss: {loss}')
-    print(f'Accuracy: {accuracy}')
+    pprint(result)
 
 if __name__ == "__main__":
     # finetune_with_tftrainer()
