@@ -16,6 +16,7 @@ from transformers import (
     AutoConfig,
     AutoTokenizer,
     TFAutoModel,
+    TFDistilBertModel,
     TFDistilBertForSequenceClassification,
     TFTrainer,
     TFTrainingArguments
@@ -23,6 +24,7 @@ from transformers import (
 from sklearn.metrics import max_error, mean_absolute_error, median_absolute_error, mean_squared_error, r2_score
 
 from tc_data import TopCoder
+from model_tcpm_distilbert import build_tcpm_model_distilbert_regression, TCPMDistilBertRegression
 
 load_dotenv()
 
@@ -60,7 +62,8 @@ def run_bert_regression_trainer():
     )
 
     with training_args.strategy.scope():
-        model = TFDistilBertForSequenceClassification.from_pretrained(os.getenv('MODEL_NAME'), config=config)
+        # model = TFDistilBertForSequenceClassification.from_pretrained(os.getenv('MODEL_NAME'), config=config)
+        model = TCPMDistilBertRegression.from_pretrained(os.getenv('MODEL_NAME'), config=config)
 
     print('\nModel Config:')
     print(config)
@@ -71,13 +74,13 @@ def run_bert_regression_trainer():
 
     tc = TopCoder()
     encoded_text = tc.get_bert_encoded_txt_features(tokenizer)
+    metadata = tc.get_meta_data_features(encoded_tech=True, softmax_tech=True)
     target = tc.get_target()
 
-    print(f'\nSize of dataset: {len(target)}')
-
-    dataset = tf.data.Dataset.from_tensor_slices((encoded_text, target))
+    split = int((4 / 5) * len(target))
+    dataset = tf.data.Dataset.from_tensor_slices((dict(**encoded_text, meta_input=metadata), target))
     dataset = dataset.shuffle(len(target))
-    train_ds, test_ds = dataset.take(int((4 / 5) * len(target))), dataset.skip(int((4 / 5) * len(target)))
+    train_ds, test_ds = dataset.take(split), dataset.skip(split)
 
     print('\nTrain dataset samples:')
     for el in train_ds.take(3):
@@ -163,6 +166,60 @@ def run_bert_regression_tfmodel():
     with open(os.path.join(os.getenv('OUTPUT_DIR'), 'result.json'), 'w') as f:
         json.dump(result, f, indent=4)
 
+def run_bert_meta_regression_tfmodel():
+    """ Run self defined combined model."""
+    print('Start Train')
+
+    tokenizer = AutoTokenizer.from_pretrained(os.getenv('MODEL_NAME'))
+    config = AutoConfig.from_pretrained(os.getenv('MODEL_NAME'), num_labels=1)
+    distilebert_model = TFDistilBertModel.from_pretrained(os.getenv('MODEL_NAME'), config=config)
+
+    print(config, tokenizer, sep='\n')
+
+    tc = TopCoder()
+    encoded_text = tc.get_bert_encoded_txt_features(tokenizer)
+    metadata = tc.get_meta_data_features(encoded_tech=True, softmax_tech=True)
+    target = tc.get_target()
+
+    split = int((4 / 5) * len(target))
+    dataset = tf.data.Dataset.from_tensor_slices((dict(**encoded_text, meta_input=metadata), target))
+    dataset = dataset.shuffle(len(target))
+    train_ds, test_ds = dataset.take(split).batch(16), dataset.skip(split).batch(8)
+
+    for i in train_ds.take(2):
+        pprint(i)
+    print()
+    for i in test_ds.take(2):
+        pprint(i)
+
+    # model = TCPMDistilBertRegression.from_pretrained(os.getenv('MODEL_NAME'), config=config)
+    model = build_tcpm_model_distilbert_regression(distilebert_model)
+    model.summary()
+    model.compile(
+        optimizer=tf.keras.optimizers.RMSprop(2e-5),
+        loss='mse',
+        metrics=['mae', 'mse']
+    )
+    history = model.fit(
+        train_ds,
+        verbose=2,
+        epochs=3,
+        steps_per_epoch=split,
+    )
+    result = model.evaluate(
+        test_ds,
+        verbose=2,
+        return_dict=True,
+    )
+
+    pprint(result)
+
+    history_df = pd.DataFrame(history.history)
+    history_df.to_json(os.path.join(os.getenv('OUTPUT_DIR'), 'train_history.json'), orient='index', indent=4)
+    with open(os.path.join(os.getenv('OUTPUT_DIR'), 'result.json'), 'w') as f:
+        json.dump(result, f, indent=4)
 
 if __name__ == "__main__":
-    run_bert_regression_tfmodel()
+    # run_metadata_model()
+    # run_bert_meta_regression_tfmodel()
+    run_bert_regression_trainer()
