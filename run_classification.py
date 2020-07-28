@@ -53,7 +53,7 @@ def build_dataset(tokenizer):
 
     # use this df to ensure the index of text and metadata and label is aligned
     req_prz_df = pd.concat([
-        tc_req['requirement'],
+        tc_req['requirements'],
         tc_meta.reindex(metadata_cols, axis=1),
         tc_prz_range
         ], axis=1)
@@ -62,7 +62,7 @@ def build_dataset(tokenizer):
     num_labels = len(req_prz_df['prize_cat'].unique()) + 1
 
     # batched encode the str to `input_ids` and `attention_mask`
-    batched_encoded = tokenizer(req_prz_df['requirement'].to_list(), padding='max_length', truncation=True)
+    batched_encoded = tokenizer(req_prz_df['requirements'].to_list(), padding='max_length', truncation=True)
 
     # List((enccoded_str, metadata, prize_cat),...)
     features = [(
