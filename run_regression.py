@@ -204,12 +204,13 @@ def run_bert_meta_regression_tfmodel():
         train_ds,
         verbose=2,
         epochs=3,
-        steps_per_epoch=split,
+        #steps_per_epoch=split // 16,
     )
     result = model.evaluate(
         test_ds,
         verbose=2,
         return_dict=True,
+        #steps=(len(target) - split) // 8,
     )
 
     pprint(result)
@@ -221,5 +222,6 @@ def run_bert_meta_regression_tfmodel():
 
 if __name__ == "__main__":
     # run_metadata_model()
-    # run_bert_meta_regression_tfmodel()
-    run_bert_regression_trainer()
+    # run_bert_regression_trainer()
+    run_bert_meta_regression_tfmodel()
+

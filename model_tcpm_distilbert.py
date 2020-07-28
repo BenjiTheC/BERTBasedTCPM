@@ -62,7 +62,7 @@ def build_tcpm_model_distilbert_classification(distilbert_model: TFDistilBertMod
 
 def build_tcpm_model_distilbert_regression(distilbert_model: TFDistilBertModel):
     """ Build TCPM regression nn model."""
-    fully_connected_layer = tf.keras.layers.Dense(1024, activation='relu', name='fully_connected')
+    fully_connected_layer = tf.keras.layers.Dense(512, activation='relu', name='fully_connected')
     regression_unit = tf.keras.layers.Dense(1, name='regression')
 
     # build input for DistilBERT and metadata.
@@ -224,7 +224,7 @@ class TCPMDistilBertRegression(TFDistilBertPreTrainedModel, TFSequenceClassifica
         self.distilbert = TFDistilBertMainLayer(config, name='distilbert')
         self.metadata_inputs = tf.keras.layers.InputLayer(input_shape=(35,), name='metadata')
         self.fully_connected = tf.keras.layers.Dense(
-            1024,
+            512,
             kernel_initializer=get_initializer(config.initializer_range),
             activation='relu',
             name='fully_connected',
@@ -285,10 +285,6 @@ class TCPMDistilBertRegression(TFDistilBertPreTrainedModel, TFSequenceClassifica
         logits = self.regressor(x)
 
         outputs = (logits,) + distilbert_output[1:] # copy-paste from original impolementation
-
-        print('\n\nIn TCPM')
-        print(logits)
-        print('Out TCPM\n\n')
 
         if labels is not None:
             loss = self.compute_loss(labels, logits)
