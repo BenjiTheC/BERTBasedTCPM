@@ -29,7 +29,7 @@ from transformers import (
 from sklearn.metrics import precision_recall_fscore_support
 
 from tc_data import TopCoder
-from model_tcpm_distilbert import TCPMDistilBertClassification, build_tcpm_model_distilbert, custom_loss_fn
+from model_tcpm_distilbert import TCPMDistilBertClassification, build_tcpm_model_distilbert_classification
 
 load_dotenv()
 # MODEL_NAME = os.getenv('MODEL_NAME')
@@ -241,7 +241,7 @@ def finetune_tf_function():
     config = AutoConfig.from_pretrained(os.getenv('MODEL_NAME'), num_labels=num_labels)
     distilbert_model = TFAutoModel.from_pretrained(os.getenv('MODEL_NAME'), config=config)
 
-    model = build_tcpm_model_distilbert(distilbert_model=distilbert_model, config=config)
+    model = build_tcpm_model_distilbert_classification(distilbert_model=distilbert_model, config=config)
 
     optimizer = tf.keras.optimizers.Adam(learning_rate=3e-5)
     loss = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)

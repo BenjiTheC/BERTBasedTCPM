@@ -23,16 +23,7 @@ from transformers.modeling_tf_utils import (
 )
 from transformers.tokenization_utils import BatchEncoding
 
-def custom_loss_fn(y_true, y_pred):
-    """ A custom loss computation for debugging"""
-    print('y_true: ', tf.cast(y_true, tf.int32))
-    print('y_pred: ', tf.cast(y_pred, tf.float32))
-    # one_hot_positions = tf.one_hot(y_true, shape_list(y_pred)[1])
-    one_hot_positions = tf.one_hot(tf.cast(y_true, tf.int32), shape_list(y_pred)[1])
-    loss = tf.nn.softmax_cross_entropy_with_logits(labels=one_hot_positions, logits=y_pred)
-    return tf.reduce_mean(loss)
-
-def build_tcpm_model_distilbert(distilbert_model: TFDistilBertModel, config: AutoConfig):
+def build_tcpm_model_distilbert_classification(distilbert_model: TFDistilBertModel, config: AutoConfig):
     """ Build TopCoder Pricing Model(TCPM) using tensorflow functional api
         The builiding process will be very similar to BERT model (using TFBertModel)
 
@@ -75,9 +66,6 @@ class TCPMDistilBertClassification(TFDistilBertPreTrainedModel, TFSequenceClassi
     def dummy_inputs(self):
         """ Overt write the parent class dummy inputs
             used to build the network
-
-            Returns:
-               {'':} 
         """
         meaningful_encoded_digits = random.randint(12, 512)
         return {
