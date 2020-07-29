@@ -196,19 +196,17 @@ def run_bert_meta_regression_tfmodel():
     model = build_tcpm_model_distilbert_regression(distilebert_model)
     model.summary()
     model.compile(
-        optimizer=tf.keras.optimizers.RMSprop(2e-5),
+        optimizer=tf.keras.optimizers.Adam(2e-6),
         loss='mse',
         metrics=['mae', 'mse']
     )
     history = model.fit(
         train_ds,
-        verbose=2,
-        epochs=6,
+        epochs=12,
         #steps_per_epoch=split // 16,
     )
     result = model.evaluate(
         test_ds,
-        verbose=2,
         return_dict=True,
         #steps=(len(target) - split) // 8,
     )
