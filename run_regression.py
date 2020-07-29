@@ -203,7 +203,7 @@ def run_bert_meta_regression_tfmodel():
     history = model.fit(
         train_ds,
         verbose=2,
-        epochs=3,
+        epochs=6,
         #steps_per_epoch=split // 16,
     )
     result = model.evaluate(
