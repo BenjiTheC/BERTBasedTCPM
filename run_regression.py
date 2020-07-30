@@ -6,6 +6,7 @@ import os
 import json
 import re
 from pprint import pprint
+from datetime import datetime
 from dotenv import load_dotenv
 
 import numpy as np
@@ -42,16 +43,21 @@ def compute_metrics(pred):
         'r2': r2_score(y_true, y_pred),
     }
 
+def mre(y_true, y_pred):
+    """ Self defined Mean Relative Error metrics"""
+    return tf.math.reduce_mean(tf.math.abs(y_true - y_pred) / y_true)
+
 def run_bert_regression_trainer():
     """ Run bert single class classification(a.k.a regression) model."""
     print('START TRAINNING FOR REGRESSION')
+    log_dir = os.path.join(os.getenv('OUTPUT_DIR'), 'hf_trainer')
 
     tokenizer = AutoTokenizer.from_pretrained(os.getenv('MODEL_NAME'))
     config = AutoConfig.from_pretrained(os.getenv('MODEL_NAME'), num_labels=1)
 
     training_args = TFTrainingArguments(
-        output_dir=os.getenv('OUTPUT_DIR'),
-        logging_dir=os.path.join(os.getenv('OUTPUT_DIR'), 'log'),
+        output_dir=log_dir,
+        logging_dir=log_dir,
         logging_first_step=True,
         logging_steps=1,
         overwrite_output_dir=True,
@@ -99,18 +105,19 @@ def run_bert_regression_trainer():
 
     trainer.train()
     trainer.save_model()
-    tokenizer.save_pretrained(os.getenv('OUTPUT_DIR'))
+    tokenizer.save_pretrained(log_dir)
 
     result = trainer.evaluate()
     print('\nTrainning eval:')
     pprint(result)
-    with open(os.path.join(os.getenv('OUTPUT_DIR'), 'eval_results.json'), 'w') as fwrite:
+    with open(os.path.join(log_dir, 'eval_results.json'), 'w') as fwrite:
         json.dump(result, fwrite, indent=4)
 
 def run_bert_regression_tfmodel():
     """ Run BERT for regression as a tfmodel."""
     print('START TRAINNING FOR REGRESSION')
 
+    # Initialize BERT model
     tokenizer = AutoTokenizer.from_pretrained(os.getenv('MODEL_NAME'))
     config = AutoConfig.from_pretrained(os.getenv('MODEL_NAME'), num_labels=1)
     model = TFDistilBertForSequenceClassification.from_pretrained(os.getenv('MODEL_NAME'), config=config)
@@ -120,6 +127,7 @@ def run_bert_regression_tfmodel():
     print('Tokenizer: ', tokenizer)
     print('Model: ', model)
 
+    # Preparing training data
     tc = TopCoder()
     encoded_text = tc.get_bert_encoded_txt_features(tokenizer)
     target = tc.get_target()
@@ -139,31 +147,29 @@ def run_bert_regression_tfmodel():
     for el in test_ds.take(3):
         pprint(el)
 
+    # TF-Fashioned training model
+    log_dir = os.path.join(os.getenv('OUTPUT_DIR'), 'logs', datetime.now().strftime('%Y%m%d-%H%M%S'))
+    tensorboard_cb = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1) # fancy visulization :)
     model.compile(
-        optimizer=tf.keras.optimizers.RMSprop(learning_rate=2e-5),
+        optimizer=tf.keras.optimizers.Adam(learning_rate=2e-6),
         loss='mse',
-        metrics=[
-            'mae',
-            'mse',
-            # tf.keras.metrics.MeanRelativeError(normalizer=[1])
-        ]
+        metrics=['mae', 'mse', mre]
     )
     history = model.fit(
         train_ds,
-        verbose=2,
-        epochs=3
+        epochs=6,
+        callbacks=[tensorboard_cb]
     )
     result = model.evaluate(
         test_ds,
-        verbose=2,
         return_dict=True
     )
 
     pprint(result)
 
     history_df = pd.DataFrame(history.history)
-    history_df.to_json(os.path.join(os.getenv('OUTPUT_DIR'), 'train_history.json'), orient='index', indent=4)
-    with open(os.path.join(os.getenv('OUTPUT_DIR'), 'result.json'), 'w') as f:
+    history_df.to_json(os.path.join(log_dir, 'train_history.json'), orient='index', indent=4)
+    with open(os.path.join(log_dir, 'result.json'), 'w') as f:
         json.dump(result, f, indent=4)
 
 def run_bert_meta_regression_tfmodel():
@@ -203,12 +209,10 @@ def run_bert_meta_regression_tfmodel():
     history = model.fit(
         train_ds,
         epochs=12,
-        #steps_per_epoch=split // 16,
     )
     result = model.evaluate(
         test_ds,
         return_dict=True,
-        #steps=(len(target) - split) // 8,
     )
 
     pprint(result)
@@ -220,6 +224,6 @@ def run_bert_meta_regression_tfmodel():
 
 if __name__ == "__main__":
     # run_metadata_model()
-    # run_bert_regression_trainer()
-    run_bert_meta_regression_tfmodel()
-
+    run_bert_regression_tfmodel()
+    run_bert_regression_trainer()
+    # run_bert_meta_regression_tfmodel()

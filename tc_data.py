@@ -265,7 +265,7 @@ class TopCoder:
     def get_bert_encoded_txt_features(self, tokenizer, extract_overview=False, return_tensor=False):
         """ Method that return encoded text from the bert tokenizer"""
         req = self.get_filtered_requirements(extract_overview)
-        batch_encoding = tokenizer(req['requirements'].to_list(), padding='max_length', truncation=True, return_tensors='tf' if return_tensor else None)
+        batch_encoding = tokenizer(req['requirements'].to_list(), padding=True, truncation=True, return_tensors='tf' if return_tensor else None)
         return batch_encoding.data
 
     def get_target(self, return_tensor=False):
