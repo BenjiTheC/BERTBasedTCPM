@@ -174,13 +174,16 @@ def run_bert_regression_tfmodel():
 
 def run_bert_meta_regression_tfmodel():
     """ Run self defined combined model."""
-    print('Start Train')
+    timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+    log_dir = os.path.join(os.getenv('OUTPUT_DIR'), timestamp)
+    model_plot = f'regression_model_{timestamp}.png'
 
     tokenizer = AutoTokenizer.from_pretrained(os.getenv('MODEL_NAME'))
     config = AutoConfig.from_pretrained(os.getenv('MODEL_NAME'), num_labels=1)
     distilebert_model = TFDistilBertModel.from_pretrained(os.getenv('MODEL_NAME'), config=config)
 
     print(config, tokenizer, sep='\n')
+    tf.keras.utils.plot_model(distilebert_model, to_file=model_plot, show_shapes=True)
 
     tc = TopCoder()
     encoded_text = tc.get_bert_encoded_txt_features(tokenizer)
@@ -192,19 +195,20 @@ def run_bert_meta_regression_tfmodel():
     dataset = dataset.shuffle(len(target))
     train_ds, test_ds = dataset.take(split).batch(16), dataset.skip(split).batch(8)
 
-    for i in train_ds.take(2):
-        pprint(i)
-    print()
-    for i in test_ds.take(2):
-        pprint(i)
+    # for i in train_ds.take(2):
+    #     pprint(i)
+    # print()
+    # for i in test_ds.take(2):
+    #     pprint(i)
 
     # model = TCPMDistilBertRegression.from_pretrained(os.getenv('MODEL_NAME'), config=config)
+    tensorboard_cb = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
     model = build_tcpm_model_distilbert_regression(distilebert_model)
     model.summary()
     model.compile(
         optimizer=tf.keras.optimizers.Adam(2e-6),
         loss='mse',
-        metrics=['mae', 'mse']
+        metrics=['mae', 'mse', mre]
     )
     history = model.fit(
         train_ds,
@@ -218,8 +222,8 @@ def run_bert_meta_regression_tfmodel():
     pprint(result)
 
     history_df = pd.DataFrame(history.history)
-    history_df.to_json(os.path.join(os.getenv('OUTPUT_DIR'), 'train_history.json'), orient='index', indent=4)
-    with open(os.path.join(os.getenv('OUTPUT_DIR'), 'result.json'), 'w') as f:
+    history_df.to_json(os.path.join(log_dir, 'train_history.json'), orient='index', indent=4)
+    with open(os.path.join(log_dir, 'result.json'), 'w') as f:
         json.dump(result, f, indent=4)
 
 if __name__ == "__main__":

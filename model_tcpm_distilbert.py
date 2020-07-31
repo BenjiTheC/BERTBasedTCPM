@@ -23,6 +23,19 @@ from transformers.modeling_tf_utils import (
 )
 from transformers.tokenization_utils import BatchEncoding
 
+def ReshapePoolingReshape(pool_size, target_shape_in, input_shape_in, target_shape_out, input_shape_out, pooling_strategy='average'):
+    """ Reshape the input to target input shape"""
+    if pooling_strategy not in ('average', 'max'):
+        raise ValueError(f'Param `pooling_strategy` needs to be either "average" or "max", get {pooling_strategy}.')
+
+    pooling_layer = tf.keras.layers.AveragePooling1D if pooling_strategy == 'average' else tf.keras.layers.MaxPool1D
+
+    return tf.keras.Sequential([
+        tf.keras.layers.Reshape(target_shape=target_shape_in, input_shape=input_shape_in, name='reshape_input'),
+        pooling_layer(pool_size=pool_size, padding='valid', data_format='channels_first', name=f'{pooling_strategy}_pooling'),
+        tf.keras.layers.Reshape(target_shape=target_shape_out, input_shape=input_shape_out, name='reshape_output'),
+    ], name='reshape_pooling_reshape')
+
 def build_tcpm_model_distilbert_classification(distilbert_model: TFDistilBertModel, config: AutoConfig):
     """ Build TopCoder Pricing Model(TCPM) using tensorflow functional api
         The builiding process will be very similar to BERT model (using TFBertModel)
@@ -64,6 +77,11 @@ def build_tcpm_model_distilbert_regression(distilbert_model: TFDistilBertModel):
     """ Build TCPM regression nn model."""
     fully_connected_layer = tf.keras.layers.Dense(512, activation='relu', name='fully_connected')
     regression_unit = tf.keras.layers.Dense(1, name='regression')
+    pooling_layer = ReshapePoolingReshape(
+        pool_size=16,
+        target_shape_in=(1, 768), input_shape_in=(768,),
+        target_shape_out=(48,), input_shape_out=(1, 48)
+    )
 
     # build input for DistilBERT and metadata.
     distilbert_input = {k: tf.keras.layers.Input(shape=(512,), dtype=tf.int32, name=k) for k in ('input_ids', 'attention_mask')}
@@ -73,6 +91,7 @@ def build_tcpm_model_distilbert_regression(distilbert_model: TFDistilBertModel):
     distilbert_output = distilbert_model(distilbert_input)
     hidden_state = distilbert_output[0] # (batch_size, seq_len, dimension)
     pooled_output = hidden_state[:, 0] # (bs, dimension)
+    pooled_output = pooling_layer(pooled_output) # feed [CLS] token repr to pooling
 
     # concat distilBERT output and metainput
     concat_layer = tf.keras.layers.concatenate([pooled_output, meta_input], name='concat_bert_meta')
@@ -229,6 +248,11 @@ class TCPMDistilBertRegression(TFDistilBertPreTrainedModel, TFSequenceClassifica
             activation='relu',
             name='fully_connected',
         )
+        self.pooling = ReshapePoolingReshape(
+            pool_size=16,
+            target_shape_in=(1, 768), input_shape_in=(768,),
+            target_shape_out=(48,), input_shape_out=(1, 48)
+        )
         # self.dropout = tf.keras.layers.Dropout(config.seq_classif_dropout)
         self.regressor = tf.keras.layers.Dense(
             config.num_labels,
@@ -272,10 +296,9 @@ class TCPMDistilBertRegression(TFDistilBertPreTrainedModel, TFSequenceClassifica
         )
         hidden_state = distilbert_output[0] # (bs, seq_len, dim)
 
-        # print('Get hidden state of distilbert', hidden_state)
-
         # append metadata after the bert output embeddings
         pooled_output = hidden_state[:, 0] # (bs, dim) gen sentence embedding == embedding of '[CLS]'
+        pooled_output = self.pooling(pooled_output)
         metadata_output = self.metadata_inputs(meta_input)
         concat_output = tf.keras.layers.concatenate([pooled_output, metadata_output])
 
