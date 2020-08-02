@@ -183,7 +183,7 @@ def run_bert_meta_regression_tfmodel():
     distilebert_model = TFDistilBertModel.from_pretrained(os.getenv('MODEL_NAME'), config=config)
 
     print(config, tokenizer, sep='\n')
-    tf.keras.utils.plot_model(distilebert_model, to_file=model_plot, show_shapes=True)
+    # tf.keras.utils.plot_model(distilebert_model, to_file=model_plot, show_shapes=True)
 
     tc = TopCoder()
     encoded_text = tc.get_bert_encoded_txt_features(tokenizer)
@@ -195,6 +195,7 @@ def run_bert_meta_regression_tfmodel():
     dataset = dataset.shuffle(len(target))
     train_ds, test_ds = dataset.take(split).batch(16), dataset.skip(split).batch(8)
 
+    print(train_ds, test_ds, sep='\n')
     # for i in train_ds.take(2):
     #     pprint(i)
     # print()
@@ -228,6 +229,6 @@ def run_bert_meta_regression_tfmodel():
 
 if __name__ == "__main__":
     # run_metadata_model()
-    run_bert_regression_tfmodel()
-    run_bert_regression_trainer()
-    # run_bert_meta_regression_tfmodel()
+    # run_bert_regression_tfmodel()
+    # run_bert_regression_trainer()
+    run_bert_meta_regression_tfmodel()
