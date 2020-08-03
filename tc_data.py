@@ -73,6 +73,7 @@ class TopCoder:
     dreq_path = os.path.join(data_path, 'detail_requirements.json') # detailed requirement path
     tech_path = os.path.join(data_path, 'tech_by_challenge.json') # technology listed by challenge
     dvec_path = os.path.join(data_path, 'document_vec_100D.json')
+    score_path = os.path.join(data_path, 'challenge_score_stat.json')
 
     develop_challenge_prize_range = {
         'FIRST_2_FINISH': (0, 600),
@@ -133,7 +134,8 @@ class TopCoder:
             df.set_index(index_col, inplace=True)
             if 'date' in index_col: # convert the datetime index to datetime object
                 df.index = pd.to_datetime(df.index)
-                df.sort_index(inplace=True)
+                
+            df.sort_index(inplace=True)
 
         if convert_cat is not None and isinstance(convert_cat, list):
             df[[f'{col}_category' for col in convert_cat]] = df[convert_cat].astype('category')
@@ -149,8 +151,12 @@ class TopCoder:
             convert_cat=['track', 'subtrack']
         )
         cbi_df['challenge_duration'] = (cbi_df.submission_end_date - cbi_df.registration_start_date).apply(lambda td: td.days)
+        cbi_df['sub_reg_ratio'] = (cbi_df.number_of_submitters / cbi_df.number_of_registration).round(2)
+        cbi_df = cbi_df.loc[cbi_df.challenge_duration >= 0]
 
-        return cbi_df.loc[cbi_df.challenge_duration >= 0].copy()
+        score_stat_df = self.create_df_from_json(self.score_path, index_col='challenge_id')
+
+        return cbi_df.join(score_stat_df, how='inner')
 
     def get_filtered_challenge_id(self):
         """ Return filtered challenges IDs for selecting training data.
