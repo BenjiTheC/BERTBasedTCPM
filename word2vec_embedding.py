@@ -20,7 +20,7 @@ def train_w2v_hyperparam():
     """ Build *ordered* bag of words from text corpus."""
     tc = TopCoder()
     req = tc.get_filtered_requirements() # no overview extraction
-    sentences = [tokenize_str(remove_stop_words_from_str(remove_punctuation(remove_digits(r)))) for r in req.itertuples(index=False)]
+    sentences = [tokenize_str(remove_stop_words_from_str(remove_punctuation(remove_digits(r)))) for cha_id, r in req.itertuples()]
 
     for epochs in range(5, 51, 5): # [5, 10, 15, ..., 49, 50]
         for window in range(5, 21, 5): #[5, 10, 15, 20]:
@@ -29,7 +29,7 @@ def train_w2v_hyperparam():
                 pprint({'epochs': epochs, 'window': window, 'initial_learning_rate': init_lr})
 
                 print('Training Word2Vec model', end='|')
-                model = Word2Vec(sentences=sentences, alpha=init_lr, window=window, min_count=10, iter=epochs, sg=1, hs=1, seed=42)
+                model = Word2Vec(sentences=sentences, alpha=init_lr, window=window, min_count=10, iter=epochs, sg=1, hs=1, seed=42, min_alpha=2e-5, workers=8)
                 
                 print('Decomposing vectors', end='|')
                 vectors = np.asarray([model.wv[word] for word in model.wv.vocab])
