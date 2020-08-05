@@ -15,7 +15,7 @@ def remove_url(s):
 
 def remove_punctuation(s: str):
     """ Remove punctuation from given string s"""
-    return s.translate(s.maketrans({p: None for p in string.punctuation}))
+    return s.translate(s.maketrans({p: None for p in string.punctuation + '[‘’“”…]'}))
 
 def remove_digits(s: str):
     """ Remove decimal digits or words containing decimal digits from given string s"""

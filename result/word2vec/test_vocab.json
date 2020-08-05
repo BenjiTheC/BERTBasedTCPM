@@ -1,0 +1,4 @@
+{
+    "positive": ["api", "android", "ios", "nodejs", "css", "rest", "html", "javascript", "docker", "java", "aws", "angularjs", "elasticsearch", "scss", "postgresql", "sql", "swift", "reactjs", "bootstrap", "spring", "jquery", "mongodb", "net", "python", "apex", "ajax", "jsp"],
+    "negative": ["explore", "risky", "qualifiers", "comparison", "throws", "eur", "otherinstructions", "bmt", "werckeryml", "doubtsproblems", "night", "webjs", "runpy", "programmers", "webapp", "jesus", "testbuild", "roundevent", "steer", "sansserif", "coo", "intresting", "onconnect", "appconfig", "leadershipengager", "contentwidth", "topology", "slugs", "javacript", "divcustom", "usercompany", "thumbnails", "filetif", "endc", "setter"]
+}
