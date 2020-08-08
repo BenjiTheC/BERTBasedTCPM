@@ -57,9 +57,9 @@ def build_learning_dataset(contain_docvec=False, normalize=False):
     for col, threshold in target_threshold.items():
         print(f'Building dataset for {col}')
         target = target_df[col]
-        test_data_fn = os.path.join(storage_path, f'{col}_test_dv{int(contain_docvec)}_norm{int(normalize)}.json')
-        train_data_original_fn = os.path.join(storage_path, f'{col}_train_original_dv{int(contain_docvec)}_norm{int(normalize)}.json')
-        train_data_resample_fn = os.path.join(storage_path, f'{col}_train_resample_dv{int(contain_docvec)}_norm{int(normalize)}.json')
+        test_data_fn = os.path.join(storage_path, f'{col}_test_dv{int(contain_docvec)}_norm{int(normalize)}_extreme.json')
+        train_data_original_fn = os.path.join(storage_path, f'{col}_train_original_dv{int(contain_docvec)}_norm{int(normalize)}_extreme.json')
+        train_data_resample_fn = os.path.join(storage_path, f'{col}_train_resample_dv{int(contain_docvec)}_norm{int(normalize)}_extreme.json')
 
         # Manually proportionate the test set contain 33% of minority data.
         if threshold['majority'] == 'up':
@@ -97,13 +97,13 @@ def build_learning_dataset(contain_docvec=False, normalize=False):
         test_data_df = pd.DataFrame(test_data)
         test_data_df.columns = [*[f'x{i}' for i in range(X_test.shape[1])], 'y']
         test_data_df.to_json(test_data_fn, orient='index')
-        print('Test data DataFrame shape: {test_data_df.shape}')
+        print(f'Test data DataFrame shape: {test_data_df.shape}')
 
         train_data_original = np.concatenate((X_train, y_train.reshape(-1, 1)), axis=1)
         train_data_original_df = pd.DataFrame(train_data_original)
         train_data_original_df.columns = [*[f'x{i}' for i in range(X_test.shape[1])], 'y']
         train_data_original_df.to_json(train_data_original_fn, orient='index')
-        print('Training data original shape: {train_data_original_df.shape}')
+        print(f'Training data original shape: {train_data_original_df.shape}')
 
         attempt = 0
         while True:
