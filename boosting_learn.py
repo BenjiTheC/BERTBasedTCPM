@@ -3,6 +3,7 @@ import os
 import json
 from pprint import pprint
 from datetime import datetime
+from typing import Union
 
 import numpy as np
 import pandas as pd
@@ -20,7 +21,35 @@ from imbalanced_regression_metrics import PrecisionRecallFscoreForRegression
 
 load_dotenv()
 
-def build_learning_dataset(contain_docvec=False, normalize=False):
+def util_stratified_split_regression(target_sr: pd.Series, threshold: Union[int, float], extreme: str, test_size: int):
+    """ A train-test split util func for spliting the training and testing sets
+        for avg_score, number_of_registration, sub_reg_ratio.
+        The split result should have a roughly equal ratio on higher-than-threshold/lower-than-threshold.
+    """
+    if extreme not in ('low', 'high'):
+        raise ValueError(f'extreme should be either \'low\' or \'high\', received \'{extreme}\'.')
+
+    gt_threshold = target_sr[target_sr > threshold]
+    lt_threshold = target_sr[target_sr < threshold]
+    eq_threshold = target_sr[target_sr == threshold]
+    if extreme == 'low': # majority (not extreme) side always include the threshold
+        gt_threshold = gt_threshold.append(eq_threshold)
+    else:
+        lt_threshold = lt_threshold.append(eq_threshold)
+
+    len_gt, len_lt = len(gt_threshold), len(lt_threshold)
+    majority_multiple = max(len_gt, len_lt) // min(len_gt, len_lt) # get the multiple number of majority data against minority data
+    minority_test_size = test_size // (majority_multiple + 1) # e.g. if majority size is 3 times of minority, minority get 1/4 of total test size
+    majority_test_size = test_size - minority_test_size
+    print(f'minority size: {minority_test_size}, marjority size: {majority_test_size}')
+
+    minority_test_sample = lt_threshold.sample(n=minority_test_size) if extreme == 'low' else gt_threshold.sample(n=minority_test_size)
+    majority_test_sample = lt_threshold.sample(n=majority_test_size) if extreme == 'high' else gt_threshold.sample(n=majority_test_size)
+
+    return pd.concat([majority_test_sample, minority_test_sample]).index
+
+
+def build_learning_dataset(tc: TopCoder):
     """ Build learning dataset for prediction of 
         - avg_score
         - number_of_registration
@@ -35,89 +64,85 @@ def build_learning_dataset(contain_docvec=False, normalize=False):
         :param contain_docvec: Boolean: Whether include document vector in the feature. Default as False
         :param normalize: Boolean: Whether to normalzie the X data.
     """
-    TC = TopCoder()
-    target_threshold = {
-        'avg_score': {'threshold': 90, 'majority': 'up'},
-        'number_of_registration': {'threshold': 30, 'majority': 'down'},
-        'sub_reg_ratio': {'threshold': 0.25, 'majority': 'down'},
+    # manually set data resampling threshold
+    target_resamp_info = {
+        'avg_score': {'threshold': 90, 'extreme': 'low'},
+        'number_of_registration': {'threshold': 30, 'extreme': 'high'},
+        'sub_reg_ratio': {'threshold': 0.25, 'extreme': 'high'},
     }
     test_size = 954 # len(feature_df) * 0.2 ~= 953.8, use 20% of the data for testing
     storage_path = os.path.join(os.curdir, 'result', 'boosting_learn', 'learning_data')
 
-    cha_info = TC.get_filtered_challenge_info()
-
-    feature_df = TC\
+    # get the raw data from TopCoder data object
+    cha_info = tc.get_filtered_challenge_info()
+    feature_df = tc\
         .get_meta_data_features(encoded_tech=True, softmax_tech=True, return_df=True)\
         .join(cha_info.reindex(['total_prize'], axis=1))
-    if contain_docvec:
-        feature_df = feature_df.join(pd.read_json(os.path.join(os.curdir, 'data', 'new_docvec.json'), orient='index'))
-    target_df = cha_info.reindex(list(target_threshold.keys()), axis=1)
+    docvec_df = pd.read_json(os.path.join(os.curdir, 'data', 'new_docvec.json'), orient='index')
+    target_df = cha_info.reindex(list(target_resamp_info.keys()), axis=1)
     if not (target_df.index == feature_df.index).all():
         raise ValueError('Check index of target_df and feature_df, it\'s not equal.')
 
-    for col, threshold in target_threshold.items():
+    for col, info in target_resamp_info.items():
         print(f'Building dataset for {col}')
-        target = target_df[col]
-        test_data_fn = os.path.join(storage_path, f'{col}_test_dv{int(contain_docvec)}_norm{int(normalize)}_extreme.json')
-        train_data_original_fn = os.path.join(storage_path, f'{col}_train_original_dv{int(contain_docvec)}_norm{int(normalize)}_extreme.json')
-        train_data_resample_fn = os.path.join(storage_path, f'{col}_train_resample_dv{int(contain_docvec)}_norm{int(normalize)}_extreme.json')
+        target_sr = target_df[col]
+        test_index = util_stratified_split_regression(target_sr, info['threshold'], info['extreme'], test_size)
 
-        # Manually proportionate the test set contain 33% of minority data.
-        if threshold['majority'] == 'up':
-            test_index = pd.concat([
-                target[target >= threshold['threshold']].sample(n=int(test_size / 3 * 2)),
-                target[target < threshold['threshold']].sample(n=int(test_size / 3)),
-            ]).index
-        else:
-            test_index = pd.concat([
-                target[target <= threshold['threshold']].sample(n=int(test_size / 3 * 2)),
-                target[target > threshold['threshold']].sample(n=int(test_size / 3)),
-            ]).index
-
-        X_train = feature_df.loc[~feature_df.index.isin(test_index)].sort_index()
-        X_test = feature_df.loc[feature_df.index.isin(test_index)].sort_index()
-        y_train = target[~target.index.isin(test_index)].sort_index()
-        y_test = target[target.index.isin(test_index)].sort_index()
-        if not ((X_train.index == y_train.index).all() and (X_test.index == y_test.index).all()):
+        X_train_raw = feature_df.loc[~feature_df.index.isin(test_index)].sort_index()
+        X_test_raw = feature_df.loc[feature_df.index.isin(test_index)].sort_index()
+        y_train_raw = target_sr[~target_sr.index.isin(test_index)].sort_index()
+        y_test_raw = target_sr[target_sr.index.isin(test_index)].sort_index()
+        if not ((X_train_raw.index == y_train_raw.index).all() and (X_test_raw.index == y_test_raw.index).all()):
             raise ValueError('Check X, y test index, they are not equal.')
 
-        # From now on it's pure numpy till storage ;-)
-        y_train, y_test = y_train.to_numpy(), y_test.to_numpy()
+        for dv in True, False:
+            print(f'Resampling with dv={dv}...')
+            test_data_fn = os.path.join(storage_path, f'{col}_test_dv{int(dv)}.json')
+            train_data_original_fn = os.path.join(storage_path, f'{col}_train_original_dv{int(dv)}.json')
+            train_data_resample_fn = os.path.join(storage_path, f'{col}_train_resample_dv{int(dv)}.json')
+            X_train, X_test, y_train, y_test = X_train_raw.copy(), X_test_raw.copy(), y_train_raw.copy(), y_test_raw.copy()
 
-        scaler = StandardScaler().fit(X_train.to_numpy())
-        X_train, X_test = scaler.transform(X_train), scaler.transform(X_test)
+            if dv:
+                X_train = X_train.join(docvec_df)
+                X_test = X_test.join(docvec_df)
 
-        print(f'X_train shape: {X_train.shape}, y_train shape: {y_train.shape}')
-        print(f'X_test shape: {X_test.shape}, y_test shape: {y_test.shape}')
+            # From now on it's pure numpy till storage ;-)
+            X_train, X_test = X_train.to_numpy(), X_test.to_numpy()
+            y_train, y_test = y_train.to_numpy(), y_test.to_numpy()
 
-        if normalize:
+            scaler = StandardScaler().fit(X_train)
             normalizer = Normalizer().fit(X_train)
+        
+            X_train, X_test = scaler.transform(X_train), scaler.transform(X_test)
             X_train, X_test = normalizer.transform(X_train), normalizer.transform(X_test)
 
-        test_data = np.concatenate((X_test, y_test.reshape(-1, 1)), axis=1)
-        test_data_df = pd.DataFrame(test_data)
-        test_data_df.columns = [*[f'x{i}' for i in range(X_test.shape[1])], 'y']
-        test_data_df.to_json(test_data_fn, orient='index')
-        print(f'Test data DataFrame shape: {test_data_df.shape}')
+            print(f'X_train shape: {X_train.shape}, y_train shape: {y_train.shape}')
+            print(f'X_test shape: {X_test.shape}, y_test shape: {y_test.shape}')
 
-        train_data_original = np.concatenate((X_train, y_train.reshape(-1, 1)), axis=1)
-        train_data_original_df = pd.DataFrame(train_data_original)
-        train_data_original_df.columns = [*[f'x{i}' for i in range(X_test.shape[1])], 'y']
-        train_data_original_df.to_json(train_data_original_fn, orient='index')
-        print(f'Training data original shape: {train_data_original_df.shape}')
+            test_data = np.concatenate((X_test, y_test.reshape(-1, 1)), axis=1)
+            test_data_df = pd.DataFrame(test_data)
+            test_data_df.columns = [*[f'x{i}' for i in range(X_test.shape[1])], 'y']
+            test_data_df.to_json(test_data_fn, orient='index')
+            print(f'Test data DataFrame shape: {test_data_df.shape}')
 
-        attempt = 0
-        while True:
-            print(f'Attempt #{attempt}...')
-            try:
-                train_data_resample_df = smoter(data=train_data_original_df, y='y', samp_method='extreme').reset_index(drop=True) # just use the default setting for SMOGN
-            except ValueError as e:
-                print(f'Encounter error: "{e}", rerun the SMOGN...')
-                continue
-            else:
-                train_data_resample_df.to_json(train_data_resample_fn, orient='index')
-                print(f'Training data resample shape: {train_data_resample_df.shape}\nData stored\n\n')
-                break
+            train_data_original = np.concatenate((X_train, y_train.reshape(-1, 1)), axis=1)
+            train_data_original_df = pd.DataFrame(train_data_original)
+            train_data_original_df.columns = [*[f'x{i}' for i in range(X_test.shape[1])], 'y']
+            train_data_original_df.to_json(train_data_original_fn, orient='index')
+            print(f'Training data original shape: {train_data_original_df.shape}')
+
+            attempt = 0
+            while True:
+                print(f'Attempt #{attempt}...')
+                try:
+                    train_data_resample_df = smoter(data=train_data_original_df, y='y', samp_method='extreme', rel_xtrm_type=info['extreme']).reset_index(drop=True) # just use the default setting for SMOGN
+                except ValueError as e:
+                    print(f'Encounter error: "{e}", rerun the SMOGN...')
+                    continue
+                else:
+                    train_data_resample_df.to_json(train_data_resample_fn, orient='index')
+                    print(f'Training data resample shape: {train_data_resample_df.shape}\nData stored\n\n')
+                    break
 
 class EnsembleTrainer:
     """ Wrapper class that takes in the algo, dataset, param_grid, training target to select:
@@ -251,6 +276,6 @@ def gs_all_targets():
             trainer = EnsembleTrainer(regressor, param_grid, target, metirc_args)
             trainer.gridsearch(verbose=1)
 
-
 if __name__ == "__main__":
-    gs_all_targets()
+    tc = TopCoder()
+    build_learning_dataset(tc)
