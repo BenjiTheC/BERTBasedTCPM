@@ -19,7 +19,6 @@ from tc_data import TopCoder
 from imbalanced_regression_metrics import PrecisionRecallFscoreForRegression
 
 load_dotenv()
-TC = TopCoder()
 
 def build_learning_dataset(contain_docvec=False, normalize=False):
     """ Build learning dataset for prediction of 
@@ -36,6 +35,7 @@ def build_learning_dataset(contain_docvec=False, normalize=False):
         :param contain_docvec: Boolean: Whether include document vector in the feature. Default as False
         :param normalize: Boolean: Whether to normalzie the X data.
     """
+    TC = TopCoder()
     target_threshold = {
         'avg_score': {'threshold': 90, 'majority': 'up'},
         'number_of_registration': {'threshold': 30, 'majority': 'down'},
@@ -191,7 +191,7 @@ class EnsembleTrainer:
             for norm in self.dataset_param_grid['norm']:
                 for strategy in self.dataset_param_grid['strategy']:
                     if verbose:
-                        print('\tGrid seraching... | dataset info: dv={dv}, norm={norm}, stra={strategy}')
+                        print(f'\tGrid seraching... | dataset info: dv={dv}, norm={norm}, stra={strategy}')
 
                     X_train, y_train = self.read_dataset(self.target, 'train_resample', dv, norm, strategy)
                     X_test, y_test = self.read_dataset(self.target, 'test', dv, norm, strategy)
