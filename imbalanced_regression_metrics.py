@@ -9,6 +9,7 @@ import os
 from typing import Union, Tuple
 
 import numpy as np
+import tensorflow as tf
 
 class PrecisionRecallFscoreForRegression:
     """ Class for precision and recall for regression problem
@@ -126,6 +127,9 @@ class PrecisionRecallFscoreForRegression:
         numerator = (alpha * phi_y_pred)[np.where(phi_y_pred >= self.tE)].sum()
         denominator = phi_y_pred[np.where(phi_y_pred >= self.tE)].sum()
 
+        if denominator == 0:
+            return 0
+
         return numerator / denominator
 
     def recall(self, y_true: np.ndarray, y_pred: np.ndarray):
@@ -133,17 +137,124 @@ class PrecisionRecallFscoreForRegression:
         alpha_func = self.smoother_alpha if self.use_smoother_alpha else self.alpha
 
         alpha = alpha_func(y_true, y_pred)
-        phi_y_ture = self.phi(y_true)
+        phi_y_true = self.phi(y_true)
 
-        numerator = (alpha * phi_y_ture)[np.where(phi_y_ture >= self.tE)].sum()
-        denominator = phi_y_ture[np.where(phi_y_ture >= self.tE)].sum()
+        numerator = (alpha * phi_y_true)[np.where(phi_y_true >= self.tE)].sum()
+        denominator = phi_y_true[np.where(phi_y_true >= self.tE)].sum()
+
+        if denominator == 0:
+            return 0
 
         return numerator / denominator
 
     def fscore(self, y_true: np.ndarray, y_pred: np.ndarray):
         """ F-measure that aggregated precision and recall."""
         precision = self.precision(y_true, y_pred)
-        recall = self.precision(y_true, y_pred)
+        recall = self.recall(y_true, y_pred)
+        beta_square = self.beta ** 2
+
+        if precision == 0 and recall == 0:
+            return 0
+
+        return (beta_square + 1) * precision * recall / (beta_square * precision + recall)
+
+class TFPrecisionRecallFscoreForRegression(PrecisionRecallFscoreForRegression):
+    """ A reimplementation of class PrecisionRecallFscoreForRegression using TensorFlow.
+        This is due to the uncompatibility of numpy ops for a "SymbolicTensor"
+    """
+    @classmethod
+    def sigmoid_base(cls, exp_pow):
+        return tf.cast(1 / (1 + tf.math.exp(-1 * exp_pow)), tf.float32)
+
+    @classmethod
+    def compute_s(cls, c, decay, delta, low=False):
+        coeff = -1 if low else 1
+        return tf.cast(coeff * tf.math.log((delta ** -1) - 1) / tf.math.abs(c * decay), tf.float32)
+
+    @classmethod
+    def compute_loss(cls, y_true, y_pred):
+        return tf.cast(tf.math.abs(y_true - y_pred), tf.float32)
+
+    def __init__(
+        self,
+        tE: float,
+        tL: float,
+        c: Union[int, float, Tuple[Union[int, float], Union[int, float]]],
+        extreme: str,
+        decay=0.5,
+        delta=1e-4,
+        k=8,
+        use_smoother_alpha: bool = True,
+        beta: float = 0.5
+    ):
+        super().__init__(tE, tL, c, extreme, decay, delta, k, use_smoother_alpha, beta)
+        self.tE = tE
+        self.tL = tL
+        self.c = c
+        self.k = k # this k is for the computation of smooth-alpha
+        self.use_smoother_alpha = use_smoother_alpha
+        self.beta = beta
+
+        if extreme == 'both':
+            self.s = (
+                self.compute_s(c[0], decay, delta, low=True),
+                self.compute_s(c[1], decay, delta)
+            )
+        else:
+            self.s = self.compute_s(c, decay, delta, low=(extreme == 'low'))
+
+    def indicator(self, y_true, y_pred):
+        return tf.cast(self.compute_loss(y_true, y_pred) <= self.tL, tf.int32)
+
+    def alpha(self, y_true, y_pred):
+        return tf.cast(self.indicator(y_true, y_pred), tf.float32)
+
+    def smoother_alpha(self, y_true, y_pred):
+        return tf.cast(self.indicator(y_true, y_pred), tf.float32) *\
+            (1 - tf.math.exp(-1 * self.k * ((self.compute_loss(y_true, y_pred) - self.tL) / self.tL) ** 2))
+
+    def phi(self, y):
+        if isinstance(self.c, (int, float)):
+            return self.sigmoid_base(self.s * (y - self.c))
+
+        elif isinstance(self.c, tuple):
+            output_tensor = tf.cast(tf.identity(y), tf.float32) # make a copy of input tensor
+
+            c_low, c_high = self.c
+            s_low, s_high = self.s
+            sigmoid_low = self.sigmoid_base(s_low * (y - c_low))
+            sigmoid_high = self.sigmoid_base(s_high * (y - c_high))
+
+            symmetry_point = (c_low + c_high) / 2
+            output_tensor = tf.where(y <= symmetry_point, sigmoid_low, output_tensor)
+            output_tensor = tf.where(y > symmetry_point, sigmoid_high, output_tensor)
+            return output_tensor
+
+    def precision(self, y_true, y_pred):
+        alpha_func = self.smoother_alpha if self.use_smoother_alpha else self.alpha
+
+        alpha = alpha_func(y_true, y_pred)
+        phi_y_pred = self.phi(y_pred)
+
+        numerator = tf.math.reduce_sum(tf.boolean_mask(alpha * phi_y_pred, phi_y_pred >= self.tE))
+        denominator = tf.math.reduce_sum(tf.boolean_mask(phi_y_pred, phi_y_pred >= self.tE))
+
+        return numerator / denominator
+
+    def recall(self, y_true, y_pred):
+        alpha_func = self.smoother_alpha if self.use_smoother_alpha else self.alpha
+
+        alpha = alpha_func(y_true, y_pred)
+        phi_y_true = self.phi(y_true)
+
+        numerator = tf.math.reduce_sum(tf.boolean_mask(alpha * phi_y_true, phi_y_true >= self.tE))
+        denominator = tf.math.reduce_sum(tf.boolean_mask(phi_y_true, phi_y_true >= self.tE))
+
+        return numerator / denominator
+
+    def fscore(self, y_true, y_pred):
+        precision = self.precision(y_true, y_pred)
+        recall = self.recall(y_true, y_pred)
         beta_square = self.beta ** 2
 
         return (beta_square + 1) * precision * recall / (beta_square * precision + recall)

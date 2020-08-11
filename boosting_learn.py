@@ -66,9 +66,9 @@ def build_learning_dataset(tc: TopCoder):
     """
     # manually set data resampling threshold
     target_resamp_info = {
-        'avg_score': {'threshold': 90, 'extreme': 'low'},
-        'number_of_registration': {'threshold': 30, 'extreme': 'high'},
-        'sub_reg_ratio': {'threshold': 0.25, 'extreme': 'high'},
+        'avg_score': {'threshold': 90, 'extreme': 'low', 'upper_bound': 100},
+        'number_of_registration': {'threshold': 30, 'extreme': 'high', 'lower_bound': 0},
+        'sub_reg_ratio': {'threshold': 0.25, 'extreme': 'high', 'upper_bound': 1},
     }
     test_size = 954 # len(feature_df) * 0.2 ~= 953.8, use 20% of the data for testing
     storage_path = os.path.join(os.curdir, 'result', 'boosting_learn', 'learning_data')
@@ -140,8 +140,16 @@ def build_learning_dataset(tc: TopCoder):
                     print(f'Encounter error: "{e}", rerun the SMOGN...')
                     continue
                 else:
+                    print(f'Training data resample shape: {train_data_resample_df.shape} - before boundary filtering')
+                    if 'upper_bound' in info:
+                        train_data_resample_df = train_data_resample_df.loc[train_data_resample_df['y'] <= info['upper_bound']]
+                    
+                    if 'lower_bound' in info:
+                        train_data_resample_df = train_data_resample_df.loc[train_data_resample_df['y'] >= info['lower_bound']]
+
                     train_data_resample_df.to_json(train_data_resample_fn, orient='index')
-                    print(f'Training data resample shape: {train_data_resample_df.shape}\nData stored\n\n')
+                    print(f'Training data resample shape: {train_data_resample_df.shape} - after boundary filtering')
+                    print('Data stored\n\n')
                     break
 
 class EnsembleTrainer:
@@ -153,9 +161,9 @@ class EnsembleTrainer:
     dataset_param_grid = {'dv': (0, 1), 'norm': (0, 1), 'strategy': ('balanced', 'extreme')}
 
     @classmethod
-    def read_dataset(cls, target, ds_type, dv, norm, strategy):
+    def read_dataset(cls, target, ds_type, dv):
         """ Read a dataset from boosting learn data path"""
-        file_name = f'{target}_{ds_type}_dv{dv}_norm{norm}_{strategy}.json'
+        file_name = f'{target}_{ds_type}_dv{dv}.json'
         dataset = pd.read_json(os.path.join(cls.dataset_path, file_name), orient='index')
 
         y = dataset.pop('y').to_numpy()
@@ -207,29 +215,30 @@ class EnsembleTrainer:
             'manual_test_precision': self.target_metrics.precision(y_test, y_test_pred),
             'manual_test_recall': self.target_metrics.recall(y_test, y_test_pred),
             'manual_test_fscore': self.target_metrics.fscore(y_test, y_test_pred),
+            'manual_test_mae': mean_absolute_error(y_test, y_test_pred),
+            'manual_test_mse': mean_squared_error(y_test, y_test_pred),
+            'manual_test_r2': r2_score(y_test, y_test_pred)
         }
 
     def gridsearch(self, verbose=0):
         """ Perform GridSearch CV over every dataset for the target"""
         regressor_name = self.regressor.__name__.lower()
         for dv in self.dataset_param_grid['dv']:
-            for norm in self.dataset_param_grid['norm']:
-                for strategy in self.dataset_param_grid['strategy']:
-                    if verbose:
-                        print(f'\tGrid seraching... | dataset info: dv={dv}, norm={norm}, stra={strategy}')
+            if verbose:
+                print(f'\tGrid seraching... | dataset info: dv={dv}')
 
-                    X_train, y_train = self.read_dataset(self.target, 'train_resample', dv, norm, strategy)
-                    X_test, y_test = self.read_dataset(self.target, 'test', dv, norm, strategy)
+            X_train, y_train = self.read_dataset(self.target, 'train_resample', dv)
+            X_test, y_test = self.read_dataset(self.target, 'test', dv)
 
-                    gs_result = self.gridsearch_one_dataset(X_train, y_train, X_test, y_test)
-                    ds_params = {'target': self.target, 'dv': dv, 'norm': norm, 'strategy': strategy}
+            gs_result = self.gridsearch_one_dataset(X_train, y_train, X_test, y_test)
+            gs_result.update(target=self.target, dv=dv)
 
-                    if verbose:
-                        print('\tGrid seraching done. Result:')
-                        pprint(gs_result, indent=2)
+            if verbose:
+                print('\tGrid seraching done. Result:')
+                pprint(gs_result, indent=2)
 
-                    with open(os.path.join(self.res_path, f'{self.target}_{regressor_name}_dv{dv}_norm{norm}_{strategy}.json'), 'w') as fwrite:
-                        json.dump({'gs': gs_result, 'ds': ds_params}, fwrite, indent=4)
+            with open(os.path.join(self.res_path, f'{self.target}_{regressor_name}_dv{dv}.json'), 'w') as fwrite:
+                json.dump(gs_result, fwrite, indent=4)
 
 def gs_all_targets():
     """ Search for avg_score training."""
@@ -243,17 +252,15 @@ def gs_all_targets():
             GradientBoostingRegressor,
             dict(
                 loss=['ls', 'lad'],
-                n_estimators=[200, 500, 1000, 2000, 2500, 3000, 4000],
-                learning_rate=[0.1, 0.01, 1e-4, 2e-5],
-                max_depth=[3, 5, 8],
+                n_estimators=[500, 1000, 2000, 3000, 4000, 5000],
+                learning_rate=[0.1, 0.01, 0.001, 1e-4, 2e-5],
                 random_state=[42]
                 )
         ),
         (
             RandomForestRegressor,
             dict(
-                n_estimators=[200, 500, 1000, 2000, 2500, 3000, 4000],
-                max_features=['auto', 'sqrt', 'log2'],
+                n_estimators=[500, 1000, 2000, 3000, 4000, 5000],
                 bootstrap=[True, False],
                 random_state=[42]
             )
@@ -262,7 +269,7 @@ def gs_all_targets():
             AdaBoostRegressor,
             dict(
                 base_estimator__max_depth=[3, 5, 8, 10],
-                n_estimators=[200, 500, 1000, 2000, 2500, 3000, 4000],
+                n_estimators=[500, 1000, 2000, 3000, 4000, 5000],
                 learning_rate=[0.1, 0.01, 1e-4, 2e-5],
                 loss=['linear', 'exponential'],
                 random_state=[42],
@@ -277,5 +284,6 @@ def gs_all_targets():
             trainer.gridsearch(verbose=1)
 
 if __name__ == "__main__":
-    tc = TopCoder()
-    build_learning_dataset(tc)
+    gs_all_targets()
+    # tc = TopCoder()
+    # build_learning_dataset(tc)
