@@ -11,6 +11,7 @@ import pandas as pd
 from sklearn.preprocessing import StandardScaler, Normalizer
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score, make_scorer
 from sklearn.model_selection import GridSearchCV
+from sklearn.tree import DecisionTreeRegressor
 from sklearn.ensemble import AdaBoostRegressor, RandomForestRegressor, GradientBoostingRegressor
 
 from smogn import smoter
@@ -174,6 +175,7 @@ class EnsembleTrainer:
     def __init__(
         self,
         regressor,
+        init_params,
         param_grid,
         target,
         metric_args,
@@ -184,6 +186,7 @@ class EnsembleTrainer:
             raise ValueError(f'target should be one of ("avg_score", "number_of_registration", "sub_reg_ratio"), received {target}')
 
         self.regressor = regressor
+        self.init_params = init_params
         self.model_param_grid = param_grid
         self.target = target
         self.target_metrics = PrecisionRecallFscoreForRegression(**metric_args)
@@ -196,7 +199,7 @@ class EnsembleTrainer:
             'recall': make_scorer(self.target_metrics.recall),
         }
         gs = GridSearchCV(
-            self.regressor(),
+            self.regressor(**self.init_params),
             param_grid=self.model_param_grid,
             scoring=scoring,
             refit='precision',
@@ -250,37 +253,40 @@ def gs_all_targets():
     regressor_param_lst = [
         (
             GradientBoostingRegressor,
+            dict(random_state=42),
             dict(
                 loss=['ls', 'lad'],
                 n_estimators=[500, 1000, 2000, 3000, 4000, 5000],
                 learning_rate=[0.1, 0.01, 0.001, 1e-4, 2e-5],
-                random_state=[42]
                 )
         ),
         (
             RandomForestRegressor,
+            dict(random_state=42),
             dict(
                 n_estimators=[500, 1000, 2000, 3000, 4000, 5000],
                 bootstrap=[True, False],
-                random_state=[42]
             )
         ),
         (
             AdaBoostRegressor,
             dict(
+                base_estimator=DecisionTreeRegressor(criterion='friedman_mse', random_state=42),
+                random_state=42
+                ),
+            dict(
                 base_estimator__max_depth=[3, 5, 8, 10],
                 n_estimators=[500, 1000, 2000, 3000, 4000, 5000],
                 learning_rate=[0.1, 0.01, 1e-4, 2e-5],
                 loss=['linear', 'exponential'],
-                random_state=[42],
                 )
         )
     ]
 
     for target, metirc_args in target_metric_args.items():
-        for regressor, param_grid in regressor_param_lst:
+        for regressor, init_params, param_grid in regressor_param_lst[2:]:
             print(f'\n========== Training {regressor.__name__} with {target} ==========')
-            trainer = EnsembleTrainer(regressor, param_grid, target, metirc_args)
+            trainer = EnsembleTrainer(regressor, init_params, param_grid, target, metirc_args)
             trainer.gridsearch(verbose=1)
 
 if __name__ == "__main__":
