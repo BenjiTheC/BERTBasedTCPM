@@ -1,0 +1,20 @@
+{
+    "regressor": "GradientBoostingRegressor",
+    "best_params": {
+        "learning_rate": 0.1,
+        "loss": "ls",
+        "n_estimators": 5000,
+        "random_state": 42
+    },
+    "best_score_in_gs": 0.3075837836523392,
+    "train_scrore_from_gs": 0.9978303006331968,
+    "test_score_from_gs": 0.2828588420681717,
+    "manual_test_precision": 0.2828588420681717,
+    "manual_test_recall": 0.25861605617948563,
+    "manual_test_fscore": 0.2776533715819453,
+    "manual_test_mae": 2.425950898850158,
+    "manual_test_mse": 18.64209492051552,
+    "manual_test_r2": 0.504301727521134,
+    "target": "avg_score",
+    "dv": 1
+}

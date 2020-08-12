@@ -1,0 +1,19 @@
+{
+    "regressor": "RandomForestRegressor",
+    "best_params": {
+        "bootstrap": true,
+        "n_estimators": 3000,
+        "random_state": 42
+    },
+    "best_score_in_gs": 0.34190101442170756,
+    "train_scrore_from_gs": 0.8208583783258839,
+    "test_score_from_gs": 0.33378206601846666,
+    "manual_test_precision": 0.33378206601846666,
+    "manual_test_recall": 0.24154766726164612,
+    "manual_test_fscore": 0.31009988611991507,
+    "manual_test_mae": 2.007394527930932,
+    "manual_test_mse": 16.78006997269485,
+    "manual_test_r2": 0.5538134671556907,
+    "target": "avg_score",
+    "dv": 1
+}
