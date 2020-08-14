@@ -464,20 +464,22 @@ def get_challenge_registration_records(cursor):
     select_query = 'SELECT * FROM Challenge_Registrant_Relation;'
     cursor.execute(select_query)
 
-    cha_reg_records = []
+    cha_reg_records = defaultdict(list)
     for challenge_id, handle, registration_date, submission_date in cursor:
-        print(f'Fethcing {challenge_id} - {handle}')
-        cha_reg_records.append({
+        print(f'Fethcing {challenge_id} - {handle}', end='\r')
+        cha_reg_records[challenge_id].append({
             'challenge_id': challenge_id,
             'username': handle,
             'registration_date': fmt_date(registration_date),
-            'submission_date': fmt_date(submission_date),
+            'submission_date': '' if submission_date is None else fmt_date(submission_date),
         })
 
-    print('Fetched {} challenge registrant records'.format(len(cha_reg_records)))
+    print('\nFetched {} challenges\' registrant records'.format(len(cha_reg_records)))
 
-    with open(os.path.join(PATH, 'challenge_registrants_records.json'), 'w') as fwrite:
-        json.dump(cha_reg_records, fwrite)
+    for cha_id, cha_reg_info in cha_reg_records.items():
+        print(f'Storing challenge registration {cha_id}.', end='\r')
+        with open(os.path.join(PATH, 'challenge_registration', f'challenge_registration_{cha_id}.json'), 'w') as fwrite:
+            json.dump(cha_reg_records, fwrite)
 
 def main():
     """ Main entrance"""
@@ -491,8 +493,9 @@ def main():
     # get_tech_by_start_date(cnx.cursor())
     # get_dev_track_info(cnx.cursor())
     # get_challenge_prz_and_avg_score(cnx.cursor())
-    get_detailed_requirements(cnx.cursor())
-    get_challenge_basic_info(cnx.cursor())
+    # get_detailed_requirements(cnx.cursor())
+    # get_challenge_basic_info(cnx.cursor())
+    get_challenge_registration_records(cnx.cursor())
     cnx.close()
 
 if __name__ == '__main__':
