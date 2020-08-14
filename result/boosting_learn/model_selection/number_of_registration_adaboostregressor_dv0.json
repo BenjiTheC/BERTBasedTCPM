@@ -1,0 +1,20 @@
+{
+    "regressor": "AdaBoostRegressor",
+    "best_params": {
+        "base_estimator__max_depth": 3,
+        "learning_rate": 0.01,
+        "loss": "linear",
+        "n_estimators": 2000
+    },
+    "best_score_in_gs": 0.21516943997023558,
+    "train_scrore_from_gs": 0.22750566977601142,
+    "test_score_from_gs": 0.24162119060274154,
+    "manual_test_precision": 0.24162119060274154,
+    "manual_test_recall": 0.4170904354218646,
+    "manual_test_fscore": 0.26381881715248434,
+    "manual_test_mae": 14.556187845673517,
+    "manual_test_mse": 280.7353712639923,
+    "manual_test_r2": -0.03993790059867841,
+    "target": "number_of_registration",
+    "dv": 0
+}

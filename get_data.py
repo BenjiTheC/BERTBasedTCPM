@@ -479,7 +479,7 @@ def get_challenge_registration_records(cursor):
     for cha_id, cha_reg_info in cha_reg_records.items():
         print(f'Storing challenge registration {cha_id}.', end='\r')
         with open(os.path.join(PATH, 'challenge_registration', f'challenge_registration_{cha_id}.json'), 'w') as fwrite:
-            json.dump(cha_reg_records, fwrite)
+            json.dump(cha_reg_info, fwrite)
 
 def main():
     """ Main entrance"""
