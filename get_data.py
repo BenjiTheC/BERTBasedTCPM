@@ -459,6 +459,26 @@ def get_challenge_basic_info(cursor):
 
     cursor.close()
 
+def get_challenge_registration_records(cursor):
+    """ Retrieve ALLL challenge registration records."""
+    select_query = 'SELECT * FROM Challenge_Registrant_Relation;'
+    cursor.execute(select_query)
+
+    cha_reg_records = []
+    for challenge_id, handle, registration_date, submission_date in cursor:
+        print(f'Fethcing {challenge_id} - {handle}')
+        cha_reg_records.append({
+            'challenge_id': challenge_id,
+            'username': handle,
+            'registration_date': fmt_date(registration_date),
+            'submission_date': fmt_date(submission_date),
+        })
+
+    print('Fetched {} challenge registrant records'.format(len(cha_reg_records)))
+
+    with open(os.path.join(PATH, 'challenge_registrants_records.json'), 'w') as fwrite:
+        json.dump(cha_reg_records, fwrite)
+
 def main():
     """ Main entrance"""
     create_data_folder()
