@@ -1,0 +1,18 @@
+{
+    "regressor": "RandomForestRegressor",
+    "best_params": {
+        "n_estimators": 4000,
+        "bootstrap": true
+    },
+    "best_score_in_rs": 0.23531032859226125,
+    "train_scrore_from_rs": 0.7849567417311829,
+    "test_score_from_rs": 0.37217470526612145,
+    "manual_test_precision": 0.37217470526612145,
+    "manual_test_recall": 0.36338490635575443,
+    "manual_test_fscore": 0.37038289109025335,
+    "manual_test_mae": 6.517808416694641,
+    "manual_test_mse": 95.44324946770529,
+    "manual_test_r2": 0.6464462171942491,
+    "target": "number_of_registration",
+    "dv": 0
+}

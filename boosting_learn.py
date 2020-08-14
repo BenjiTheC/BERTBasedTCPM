@@ -10,7 +10,7 @@ import pandas as pd
 
 from sklearn.preprocessing import StandardScaler, Normalizer
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score, make_scorer
-from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.ensemble import AdaBoostRegressor, RandomForestRegressor, GradientBoostingRegressor
 
@@ -223,6 +223,39 @@ class EnsembleTrainer:
             'manual_test_r2': r2_score(y_test, y_test_pred)
         }
 
+    def randomsearch_one_dataset(self, X_train, y_train, X_test, y_test, **rs_kwargs):
+        """ Perform Random Search CV with one dataset."""
+        scoring = {
+            'precision': make_scorer(self.target_metrics.precision),
+            'recall': make_scorer(self.target_metrics.recall),
+            'fscore': make_scorer(self.target_metrics.fscore),
+        }
+        rs = RandomizedSearchCV(
+            self.regressor(**self.init_params),
+            param_distributions=self.model_param_grid,
+            scoring=scoring,
+            refit='precision',
+            cv=self.cv,
+            n_jobs=-1,
+            **rs_kwargs
+        )
+        rs.fit(X_train, y_train)
+
+        y_test_pred = rs.predict(X_test)
+        return {
+            'regressor': self.regressor.__name__,
+            'best_params': rs.best_params_,
+            'best_score_in_rs': rs.best_score_,
+            'train_scrore_from_rs': rs.score(X_train, y_train),
+            'test_score_from_rs': rs.score(X_test, y_test),
+            'manual_test_precision': self.target_metrics.precision(y_test, y_test_pred),
+            'manual_test_recall': self.target_metrics.recall(y_test, y_test_pred),
+            'manual_test_fscore': self.target_metrics.fscore(y_test, y_test_pred),
+            'manual_test_mae': mean_absolute_error(y_test, y_test_pred),
+            'manual_test_mse': mean_squared_error(y_test, y_test_pred),
+            'manual_test_r2': r2_score(y_test, y_test_pred)
+        }
+
     def gridsearch(self, verbose=0):
         """ Perform GridSearch CV over every dataset for the target"""
         regressor_name = self.regressor.__name__.lower()
@@ -241,6 +274,26 @@ class EnsembleTrainer:
                 pprint(gs_result, indent=2)
 
             with open(os.path.join(self.res_path, f'{self.target}_{regressor_name}_dv{dv}.json'), 'w') as fwrite:
+                json.dump(gs_result, fwrite, indent=4)
+
+    def randomsearch(self, verbose=0, n_iter=10):
+        """ Perform RandomSearch CV over earch dataset for the target"""
+        regressor_name = self.regressor.__name__.lower()
+        for dv in self.dataset_param_grid['dv']:
+            if verbose:
+                print(f'\tRandom seraching... | dataset info: dv={dv}')
+
+            X_train, y_train = self.read_dataset(self.target, 'train_resample', dv)
+            X_test, y_test = self.read_dataset(self.target, 'test', dv)
+
+            gs_result = self.randomsearch_one_dataset(X_train, y_train, X_test, y_test, verbose=verbose, n_iter=n_iter)
+            gs_result.update(target=self.target, dv=dv)
+
+            if verbose:
+                print('\tRandom seraching done. Result:')
+                pprint(gs_result, indent=2)
+
+            with open(os.path.join(self.res_path, f'{self.target}_{regressor_name}_dv{dv}_rs.json'), 'w') as fwrite:
                 json.dump(gs_result, fwrite, indent=4)
 
 def gs_all_targets():
@@ -289,7 +342,53 @@ def gs_all_targets():
             trainer = EnsembleTrainer(regressor, init_params, param_grid, target, metirc_args)
             trainer.gridsearch(verbose=1)
 
+def rs_all_targets():
+    """ Call trainer"""
+    target_metric_args = {
+        # 'avg_score': dict(tE=0.6, tL=3, c=90, extreme='low', decay=0.1),
+        'number_of_registration': dict(tE=0.6, tL=8, c=30, extreme='high'),
+        'sub_reg_ratio': dict(tE=0.6, tL=0.07, c=0.25, extreme='high')
+    }
+    regressor_param_lst = [
+        (
+            GradientBoostingRegressor,
+            dict(random_state=42),
+            dict(
+                loss=['ls', 'lad'],
+                n_estimators=[500, 1000, 2000, 3000, 4000, 5000],
+                learning_rate=[0.1, 0.01, 0.001, 1e-4, 2e-5],
+                )
+        ),
+        (
+            RandomForestRegressor,
+            dict(random_state=42),
+            dict(
+                n_estimators=[500, 1000, 2000, 3000, 4000, 5000],
+                bootstrap=[True, False],
+            )
+        ),
+        (
+            AdaBoostRegressor,
+            dict(
+                base_estimator=DecisionTreeRegressor(criterion='friedman_mse', random_state=42),
+                random_state=42
+                ),
+            dict(
+                base_estimator__max_depth=[3, 5, 8, 10],
+                n_estimators=[500, 1000, 2000, 3000, 4000, 5000],
+                learning_rate=[0.1, 0.01, 1e-4, 2e-5],
+                loss=['linear', 'exponential'],
+                )
+        )
+    ]
+
+    for target, metirc_args in target_metric_args.items():
+        for i, (regressor, init_params, param_grid) in enumerate(regressor_param_lst):
+            print(f'\n========== Training {regressor.__name__} with {target} rs ==========')
+            trainer = EnsembleTrainer(regressor, init_params, param_grid, target, metirc_args)
+            trainer.randomsearch(verbose=1, n_iter=10 if i == 1 else 15)
+
 if __name__ == "__main__":
-    gs_all_targets()
+    rs_all_targets()
     # tc = TopCoder()
     # build_learning_dataset(tc)
