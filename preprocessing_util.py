@@ -3,10 +3,15 @@
 import re
 import string
 
+import numpy as np
 from gensim.parsing.preprocessing import STOPWORDS as GENSIM_STOP_WORDS
 
 # Gensim stop word list is larger than scikit-learn & nltk stop wrods, but contains word "computer"
 TC_STOP_WORDS = GENSIM_STOP_WORDS - {'computer'}
+
+def consine_similarity(v0, v1):
+    """ A util function that takes two vectors in and calculate the cosine simialrity"""
+    return np.dot(v0, v1) / (np.linalg.norm(v0) * np.linalg.norm(v1))
 
 def remove_url(s):
     """ Remove url from given string s."""

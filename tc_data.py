@@ -8,8 +8,9 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 from bs4 import BeautifulSoup, NavigableString, Tag
+from sklearn import preprocessing
 
-from preprocessing_util import remove_url, remove_punctuation, remove_digits
+from preprocessing_util import remove_url, remove_punctuation, remove_digits, consine_similarity
 
 def extract_txt_from_node(node, is_nav=False, rm_url=True, rm_punc=False, rm_digits=False, rm_uppercase=False, delimiter=' '):
     """ Extract text from given node of a HTML parse tree, remove url, words with digits, punctuation."""
@@ -74,6 +75,7 @@ class TopCoder:
     tech_path = os.path.join(data_path, 'tech_by_challenge.json') # technology listed by challenge
     dvec_path = os.path.join(data_path, 'document_vec_100D.json')
     score_path = os.path.join(data_path, 'challenge_score_stat.json')
+    cha_reg_dir = os.path.join(data_path, 'challenge_registration')
 
     develop_challenge_prize_range = {
         'FIRST_2_FINISH': (0, 600),
@@ -94,6 +96,7 @@ class TopCoder:
     def __init__(self):
         self.titles, self.requirements = self.process_detailed_requirements()
         self.challenge_basic_info: pd.DataFrame = self.read_challenge_basic_info()
+        self.global_features = self.extract_global_context_features()
 
     def process_detailed_requirements(self) -> (pd.DataFrame, pd.DataFrame):
         """ Process the detailed requirements from loaded json"""
@@ -243,14 +246,24 @@ class TopCoder:
         tech_pop, encoded_tech = self.calculate_tech_popularity()
         return encoded_tech, encoded_tech.apply(lambda col: col * tech_pop.loc[tech_pop['tech'] == col.name, 'softmax_popularity'].iloc[0]).sum(axis=1).to_frame().rename(columns={0: 'softmax_sum'})
 
-    def get_meta_data_features(self, return_tensor=False, normalize=False, encoded_tech=False, softmax_tech=False, return_df=False):
+    def get_meta_data_features(self,
+        return_tensor=False,
+        standardize=False,
+        normalize=False,
+        encoded_tech=False,
+        softmax_tech=False,
+        contain_dv=False,
+        contain_prize=False,
+        return_df=False
+        ):
         """ Get meta data as training features.
 
             :param return_tensor: when True, return a list of Tensor(shape)
             :param normalize: whether to use (df - df.mean()) / df.std() to normalize
             data
         """
-        metadata_cols = ['number_of_platforms', 'number_of_technologies', 'project_id', 'challenge_duration']
+        metadata_cols = ['number_of_platforms', 'number_of_technologies', 'project_id', 'challenge_duration']\
+            + (['total_prize'] if contain_prize else [])
         metadata_df = self.get_filtered_challenge_info().reindex(metadata_cols, axis=1)
 
         if encoded_tech or softmax_tech:
@@ -260,8 +273,18 @@ class TopCoder:
             if encoded_tech:
                 metadata_df = pd.concat([metadata_df, encoded_tech_df], axis=1)
 
+        if contain_dv:
+            metadata_df = metadata_df.join(pd.read_json(os.path.join(os.curdir, 'data', 'new_docvec.json'), orient='index'))
+
+        if standardize:
+            index, columns = metadata_df.index, metadata_df.columns
+            std_data = preprocessing.scale(metadata_df)
+            metadata_df = pd.DataFrame.from_records(std_data, index=index, columns=columns)
+
         if normalize:
-            metadata_df = (metadata_df - metadata_df.mean()) / metadata_df.std()
+            index, columns = metadata_df.index, metadata_df.columns
+            norm_data = preprocessing.normalize(metadata_df)
+            metadata_df = pd.DataFrame.from_records(norm_data, index=index, columns=columns)
 
         if return_df:
             return metadata_df
@@ -279,3 +302,89 @@ class TopCoder:
         prz_arr = self.get_filtered_challenge_info()['total_prize'].to_numpy()
 
         return [tf.constant(prz) for prz in prz_arr] if return_tensor else prz_arr
+
+    def extract_global_context_features(self):
+        """ Detect the challenges that are open simutanously
+            Count the activate workers who are in the registration of some tasks.
+        """
+        cha_info = self.get_filtered_challenge_info()
+        cha_start_and_end_date = cha_info.reindex(['registration_start_date', 'submission_end_date'], axis=1)
+
+        # The feature we use is a vector of [*metadata, *docvec]
+        feature_df = self.get_meta_data_features(
+            encoded_tech=True,
+            softmax_tech=True,
+            contain_dv=True,
+            contain_prize=True,
+            standardize=True,
+            normalize=True,
+            return_df=True,
+        )
+
+        new_feature_dct = {}
+        for cha_id, start_date, end_date in cha_start_and_end_date.itertuples():
+            new_feature_dct[cha_id] = self.detect_competing_cha(
+                cha_id,
+                start_date,
+                end_date,
+                cha_start_and_end_date.loc[cha_start_and_end_date.index != cha_id],
+                feature_df,
+                cha_info['project_id'],
+            )
+
+        return pd.DataFrame.from_dict(new_feature_dct, orient='index')
+
+    def detect_competing_cha(self,
+        challenge_id: int,
+        start_date: pd.Timestamp,
+        end_date: pd.Timestamp,
+        challenges: pd.DataFrame,
+        feature_df: pd.DataFrame,
+        project_ids: pd.Series,
+        ):
+        """ Detect a group of stuff."""
+        competing_cha = [cha_id for cha_id, sub in challenges['submission_end_date'].iteritems() if start_date <= sub <= end_date]
+
+        target_cha_vec = feature_df.loc[challenge_id].to_numpy()
+        cos_sim_result = {}
+        active_workers = set()
+        for comp_cha_id in competing_cha:
+            competing_cha_vec = feature_df.loc[comp_cha_id].to_numpy()
+            cos_sim_result[comp_cha_id] = consine_similarity(target_cha_vec, competing_cha_vec)
+
+            with open(os.path.join(self.cha_reg_dir, f'challenge_registration_{comp_cha_id}.json')) as f:
+                active_workers.update([cha_reg['username'] for cha_reg in json.load(f)])
+
+        cos_sim_sr = pd.Series(cos_sim_result)
+        same_proj_indicator = pd.Series({cha_id: int(project_ids[challenge_id] == project_ids[cha_id]) for cha_id in competing_cha})
+        ratio_same_proj = same_proj_indicator.mean()
+
+        return {
+            'ratio_of_same_project': ratio_same_proj if not np.isnan(ratio_same_proj) else -1,
+            'num_of_competing_tasks': len(competing_cha),
+            'num_of_highly_similar_tasks': cos_sim_sr[cos_sim_sr >= 0.5].count(),
+            'num_of_similar_tasks': cos_sim_sr[(cos_sim_sr >= 0) & (cos_sim_sr < 0.5)].count(),
+            'num_of_different_tasks': cos_sim_sr[(cos_sim_sr >= -0.5) & (cos_sim_sr < 0)].count(),
+            'num_of_highly_different_tasks': cos_sim_sr[cos_sim_sr < -0.5].count(),
+            'num_of_active_workers': len(active_workers),
+        }
+
+    def build_final_dataset(self, target: str):
+        """ Build the dataset that combines metadata, document vectors and """
+        if target not in ('total_prize', 'avg_score', 'number_of_registration', 'sub_reg_ratio'):
+            raise ValueError('target is not valid, only options are \'total_prize\', \'avg_score\', \'number_of_registration\', \'sub_reg_ratio\'.')
+
+        contain_prize = not bool(target == 'total_prize')
+
+        metadata_features = self.get_meta_data_features(
+            encoded_tech=True,
+            softmax_tech=True,
+            contain_dv=True,
+            contain_prize=contain_prize,
+            return_df=True,
+        )
+
+        X = pd.concat([self.global_features, metadata_features], axis=1)
+        y = self.get_filtered_challenge_info()[target]
+
+        return X, y
