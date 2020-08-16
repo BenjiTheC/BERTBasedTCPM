@@ -274,7 +274,12 @@ class TopCoder:
                 metadata_df = pd.concat([metadata_df, encoded_tech_df], axis=1)
 
         if contain_dv:
-            metadata_df = metadata_df.join(pd.read_json(os.path.join(os.curdir, 'data', 'new_docvec.json'), orient='index'))
+            metadata_df = metadata_df.join(
+                pd.read_json(
+                    os.path.join(os.curdir, 'data', 'new_docvec.json'),
+                    orient='index'
+                ).rename(columns={i: f'dv{i}' for i in range(100)})
+            )
 
         if standardize:
             index, columns = metadata_df.index, metadata_df.columns
@@ -355,17 +360,23 @@ class TopCoder:
             with open(os.path.join(self.cha_reg_dir, f'challenge_registration_{comp_cha_id}.json')) as f:
                 active_workers.update([cha_reg['username'] for cha_reg in json.load(f)])
 
-        cos_sim_sr = pd.Series(cos_sim_result)
+        # aggregate the count of competing challenges by similarity intervals.
+        cos_sim_sr = pd.Series(cos_sim_result).round(6)
+        similarity_intervals = np.linspace(-1, 1, 21)
+        num_of_tasks_by_sim_sr = pd.cut(cos_sim_sr, bins=similarity_intervals).value_counts().sort_index()
+        num_of_tasks_by_sim_dct = {f'num_of_tasks_sim{intv}': cnt for intv, cnt in num_of_tasks_by_sim_sr.to_dict().items()}
+
+        if len(cos_sim_sr) != num_of_tasks_by_sim_sr.sum():
+            raise ValueError(f'Slicing intervals failed, total of {len(cos_sim_sr)}, sliced out {num_of_tasks_by_sim_sr.sum()}')
+
+        # check if there are challenges under the same project as target challenge in competing challenges
         same_proj_indicator = pd.Series({cha_id: int(project_ids[challenge_id] == project_ids[cha_id]) for cha_id in competing_cha})
         ratio_same_proj = same_proj_indicator.mean()
 
         return {
             'ratio_of_same_project': ratio_same_proj if not np.isnan(ratio_same_proj) else -1,
             'num_of_competing_tasks': len(competing_cha),
-            'num_of_highly_similar_tasks': cos_sim_sr[cos_sim_sr >= 0.5].count(),
-            'num_of_similar_tasks': cos_sim_sr[(cos_sim_sr >= 0) & (cos_sim_sr < 0.5)].count(),
-            'num_of_different_tasks': cos_sim_sr[(cos_sim_sr >= -0.5) & (cos_sim_sr < 0)].count(),
-            'num_of_highly_different_tasks': cos_sim_sr[cos_sim_sr < -0.5].count(),
+            **num_of_tasks_by_sim_dct,
             'num_of_active_workers': len(active_workers),
         }
 

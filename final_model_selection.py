@@ -57,6 +57,7 @@ def kfold_predict_validate_gradient_boosting(X: pd.DataFrame, y: pd.Series, cv=1
     Xnp, ynp = X.to_numpy(), y.to_numpy()
 
     pred_sr_lst = []
+    cv_feature_importance = []
     cv_eval_res = []
     for train_idx, test_idx in kfold.split(Xnp):
         X_train, y_train = Xnp[train_idx], ynp[train_idx]
@@ -77,6 +78,8 @@ def kfold_predict_validate_gradient_boosting(X: pd.DataFrame, y: pd.Series, cv=1
         )
         gbreg.fit(X_train, y_train)
 
+        cv_feature_importance.append(gbreg.feature_importances_)
+
         y_p = gbreg.predict(X_test)
         pred_sr_lst.append(pd.Series(y_p, index=test_cha_id))
 
@@ -95,7 +98,7 @@ def kfold_predict_validate_gradient_boosting(X: pd.DataFrame, y: pd.Series, cv=1
         'mre': mre(y, y_pred)
     }
 
-    return y_pred, pd.DataFrame.from_records(cv_eval_res), overall_score
+    return y_pred, pd.DataFrame.from_records(cv_eval_res), overall_score, pd.DataFrame(cv_feature_importance, columns=X.columns)
 
 def kfold_predict_validate_neural_network(X: pd.DataFrame, y: pd.Series, cv=10, num_hidden_layer=2, dimension=64, es_min_delta=1):
     """ Perform KFold predict and validation on the whole dataset."""
