@@ -262,9 +262,10 @@ class TopCoder:
             :param normalize: whether to use (df - df.mean()) / df.std() to normalize
             data
         """
+        cbi = self.get_filtered_challenge_info()
         metadata_cols = ['number_of_platforms', 'number_of_technologies', 'project_id', 'challenge_duration']\
             + (['total_prize'] if contain_prize else [])
-        metadata_df = self.get_filtered_challenge_info().reindex(metadata_cols, axis=1)
+        metadata_df = cbi.reindex(metadata_cols, axis=1).join(cbi['subtrack_category'].cat.codes.rename('subtrack'))
 
         if encoded_tech or softmax_tech:
             encoded_tech_df, softmax_tech_df = self.get_encoded_tech_feature()

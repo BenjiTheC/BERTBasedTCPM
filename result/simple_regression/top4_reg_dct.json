@@ -1,0 +1,26 @@
+{
+    "avg_score": {
+        "RandomForestRegressor": 0.019541,
+        "GradientBoostingRegressor": 0.021072,
+        "SVR": 0.023379,
+        "BayesianRidge": 0.025494
+    },
+    "num_or_reg": {
+        "RandomForestRegressor": 0.5675,
+        "GradientBoostingRegressor": 0.57285,
+        "SVR": 0.62309,
+        "DecisionTreeRegressor": 0.670056
+    },
+    "sub_ratio": {
+        "RandomForestRegressor": 0.769626,
+        "GradientBoostingRegressor": 0.783663,
+        "KNeighborsRegressor": 0.78941,
+        "BayesianRidge": 0.86691
+    },
+    "price": {
+        "RandomForestRegressor": 0.914651,
+        "GradientBoostingRegressor": 0.927509,
+        "DecisionTreeRegressor": 1.081675,
+        "GaussianProcessRegressor": 1.21281
+    }
+}

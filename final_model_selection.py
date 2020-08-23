@@ -4,19 +4,38 @@
 
 import os
 import json
+from typing import Optional
 from pprint import pprint
 from datetime import datetime
 
+import joblib
 import numpy as np
 import pandas as pd
 
 import tensorflow as tf
 
-from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.linear_model import BayesianRidge
+from sklearn.svm import SVR
+from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.gaussian_process.kernels import (
+    RBF,
+    Matern,
+    RationalQuadratic,
+    ExpSineSquared,
+    DotProduct,
+    ConstantKernel,
+    WhiteKernel,
+)
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.neighbors import KNeighborsRegressor
+
 from sklearn.preprocessing import StandardScaler, Normalizer, scale, normalize
 from sklearn.model_selection import (
     cross_val_predict,
     cross_validate,
+    RandomizedSearchCV,
+    train_test_split,
     KFold
 )
 from sklearn.metrics import (
@@ -27,6 +46,8 @@ from sklearn.metrics import (
 )
 from sklearn.pipeline import make_pipeline, Pipeline
 from dotenv import load_dotenv
+
+from tc_data import TopCoder
 
 load_dotenv()
 
@@ -45,6 +66,121 @@ def build_sequential_neural_network(num_hidden_layers=2, dimension=64, input_sha
         *[tf.keras.layers.Dense(dimension, activation='relu', name=f'layer_{i}') for i in range(num_hidden_layers)],
         tf.keras.layers.Dense(1, name='reg'),
     ], name=f'model_h{num_hidden_layers}d{dimension}')
+
+def random_serach_top_tiers():
+    """ Perform random search to find the best hyper parameters."""
+    tc = TopCoder()
+
+    model_dct = {
+        'BayesianRidge': BayesianRidge,
+        'DecisionTreeRegressor': DecisionTreeRegressor,
+        'GaussianProcessRegressor': GaussianProcessRegressor,
+        'GradientBoostingRegressor': GradientBoostingRegressor,
+        'KNeighborsRegressor': KNeighborsRegressor,
+        'RandomForestRegressor': RandomForestRegressor,
+        'SVR': SVR,
+    }
+
+    model_args_dct = {
+        'BayesianRidge': {
+            'fixed_args': dict(n_iter=1000),
+            'tuned_args': dict(
+                tol=[1e-3, 1e-4, 1e-5, 1e-6],
+            ),
+        },
+        'DecisionTreeRegressor': {
+            'fixed_args': dict(random_state=42),
+            'tuned_args': dict(
+                criterion=['mse', 'mae', 'friedman_mse'],
+                max_depth=[None, 3, 5, 10]
+            ),
+        },
+        'GaussianProcessRegressor': {
+            'fixed_args': dict(),
+            'tuned_args': dict(kernel=[
+                1.0 * RBF(),
+                1.0 * RationalQuadratic(),
+                ConstantKernel() * (DotProduct() ** 2),
+                DotProduct() * WhiteKernel()
+            ]),
+        },
+        'GradientBoostingRegressor': {
+            'fixed_args': dict(random_state=42, n_iter_no_change=5),
+            'tuned_args': dict(
+                loss=['ls', 'lad'],
+                n_estimators=[200, 500, 1000, 1500],
+                learning_rate=[0.01, 0.001, 1e-4],
+                tol=[0.01, 0.001, 1e-4, 1e-5, 2e-5, 1e-6],
+            ),
+        },
+        'KNeighborsRegressor': {
+            'fixed_args': dict(n_jobs=-1),
+            'tuned_args': dict(
+                n_neighbors=[5, 10, 15, 20],
+                weights=['uniform', 'distance'],
+                algorithm=['ball_tree', 'kd_tree'],
+                leaf_size=[30, 60, 100],
+            ),
+        },
+        'RandomForestRegressor': {
+            'fixed_args': dict(n_jobs=-1, verbose=1, random_state=42, bootstrap=True),
+            'tuned_args': dict(
+                n_estimators=[100, 200, 500, 1000],
+                max_features=['auto', 'sqrt', 0.333],
+                criterion=['mae', 'mse'],
+            ),
+        },
+        'SVR': {
+            'fixed_args': dict(cache_size=1000),
+            'tuned_args': [
+                dict(kernel='rbf', gamma=['scale', 'auto'], tol=[1e-3, 1e-4, 1e-5, 2e-5], C=[1, 10, 100, 1000]),
+                dict(kernal='linear', tol=[1e-3, 1e-4, 1e-5, 2e-5], C=[1, 10, 100, 1000]),
+                dict(kernel='poly', degree=[2, 3, 5], coef0=[0, 0.5, 5, 50, 100], tol=[1e-3, 1e-4, 1e-5, 2e-5], C=[1, 10, 100, 1000]),
+            ],
+        },
+    }
+
+    scoring = {
+        'mae': make_scorer(mean_absolute_error),
+        'mre': make_scorer(mre),
+    }
+
+    rs_path = os.path.join(os.curdir, 'result', 'random_search_res')
+
+    with open(os.path.join(os.curdir, 'result', 'simple_regression', 'top4_reg_dct.json')) as f:
+        top_regs_dct = {target: list(metrics.keys()) for target, metrics in json.load(f).items() if target != 'price'}
+
+    for target, reg_lst in top_regs_dct.items():
+        print(f'{target} | Random Searching....')
+        X, y = tc.build_final_dataset(target)
+        Xnp, ynp = X.to_numpy(), y.to_numpy()
+        X_train, X_test, y_train, y_test = train_test_split(Xnp, ynp, test_size=0.3, random_state=42)
+
+        for reg_name in reg_lst:
+            print(f'RS on {reg_name}...')
+            reg = model_dct[reg_name]
+            args = model_args_dct[reg_name]
+            
+            rs = RandomizedSearchCV(
+                reg(**args['fixed_args']),
+                param_distributions=args['tuned_args'],
+                n_iter=6,
+                scoring=scoring,
+                refit='mre',
+                n_jobs=-1,
+                cv=10,
+                random_state=42,
+            )
+            rs.fit(X_train, y_train)
+
+            rs_res = {
+                'regressor': reg_name,
+                'best_params': rs.best_params_,
+                'best_score_in_rs': rs.best_score_,
+            }
+
+            with open(os.path.join(rs_path, f'{target}_{reg_name}_rs.json'), 'w') as f:
+                json.dump(rs_res, f, indent=4)
 
 def kfold_predict_validate_gradient_boosting(X: pd.DataFrame, y: pd.Series, cv=10, loss='ls', tol=0.01, n_iter_no_change=5):
     """ Perform K-Fold validation and prediction for gradient boosting."""
@@ -167,3 +303,32 @@ def kfold_predict_validate_neural_network(X: pd.DataFrame, y: pd.Series, cv=10, 
     }
 
     return y_pred, pd.DataFrame.from_records(cv_eval_res), overall_score
+
+def train_gb_for_production(X: pd.DataFrame, y: pd.Series, target: str, loss='ls', tol=0.01, n_iter_no_change=5):
+    """ Train Gradient Boosting model for production."""
+    if not all(X.index == y.index):
+        raise ValueError('The indices of X and y are not equal.')
+
+    Xnp, ynp = X.to_numpy(), y.to_numpy()
+
+    pipeline = Pipeline([
+        ('scaler', StandardScaler()),
+        (f'{target}_gb_reg', GradientBoostingRegressor(
+            n_estimators=2000,
+            validation_fraction=0.2,
+            random_state=42,
+            verbose=1,
+            loss=loss,
+            tol=tol,
+            n_iter_no_change=n_iter_no_change,
+        ))
+    ])
+    pipeline.fit(Xnp, ynp)
+
+    estimator_path = os.path.join(os.curdir, 'result', 'final_models', f'{target}_estimator.joblib')
+    joblib.dump(pipeline, estimator_path)
+
+    return pipeline
+
+if __name__ == "__main__":
+    random_serach_top_tiers()

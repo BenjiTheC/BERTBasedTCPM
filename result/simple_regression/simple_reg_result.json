@@ -1,0 +1,122 @@
+{
+    "avg_score": {
+        "mae": {
+            "LinearRegression": 2.321305857165503,
+            "Ridge": 2.3167088760320924,
+            "Lasso": 2.3910255171967534,
+            "ElasticNet": 2.479890161547877,
+            "BayesianRidge": 2.2439074839185826,
+            "SVR": 1.9662177660750255,
+            "GaussianProcessRegressor": 75.50038863140708,
+            "DecisionTreeRegressor": 2.2555624157091225,
+            "RandomForestRegressor": 1.6827313806950666,
+            "AdaBoostRegressor": 4.534285027449362,
+            "GradientBoostingRegressor": 1.8267509886190076,
+            "KNeighborsRegressor": 2.424121355487224
+        },
+        "mre": {
+            "LinearRegression": 0.026219101664601834,
+            "Ridge": 0.026173693534007957,
+            "Lasso": 0.027519371443866042,
+            "ElasticNet": 0.028434594370893785,
+            "BayesianRidge": 0.025493952156033218,
+            "SVR": 0.023378809962787527,
+            "GaussianProcessRegressor": 0.7852108720509978,
+            "DecisionTreeRegressor": 0.02569655508006592,
+            "RandomForestRegressor": 0.01954126364435116,
+            "AdaBoostRegressor": 0.04818016079912777,
+            "GradientBoostingRegressor": 0.021072119081363406,
+            "KNeighborsRegressor": 0.02730408093033771
+        }
+    },
+    "num_or_reg": {
+        "mae": {
+            "LinearRegression": 7.685002121719147,
+            "Ridge": 7.674444685389704,
+            "Lasso": 8.148881047736563,
+            "ElasticNet": 8.111856809028511,
+            "BayesianRidge": 7.52266786826069,
+            "SVR": 7.836720230750421,
+            "GaussianProcessRegressor": 21.125679222951756,
+            "DecisionTreeRegressor": 9.176482770195346,
+            "RandomForestRegressor": 6.634694680487445,
+            "AdaBoostRegressor": 12.210873340660497,
+            "GradientBoostingRegressor": 6.712147349017071,
+            "KNeighborsRegressor": 7.9186860513207815
+        },
+        "mre": {
+            "LinearRegression": 0.7070923359269863,
+            "Ridge": 0.7060270472579051,
+            "Lasso": 0.8517031393317952,
+            "ElasticNet": 0.8599698058770512,
+            "BayesianRidge": 0.701092942669965,
+            "SVR": 0.6230904403996155,
+            "GaussianProcessRegressor": 1.2145600760033566,
+            "DecisionTreeRegressor": 0.6700563108551308,
+            "RandomForestRegressor": 0.5674998795366651,
+            "AdaBoostRegressor": 1.8589381242011807,
+            "GradientBoostingRegressor": 0.5728495767106978,
+            "KNeighborsRegressor": 0.6975053691611061
+        }
+    },
+    "sub_ratio": {
+        "mae": {
+            "LinearRegression": 0.09969605510035436,
+            "Ridge": 0.09956855940566103,
+            "Lasso": 0.12609781212679833,
+            "ElasticNet": 0.12609781212679833,
+            "BayesianRidge": 0.09755484027849878,
+            "SVR": 0.09855718773976155,
+            "GaussianProcessRegressor": 0.3945890057119066,
+            "DecisionTreeRegressor": 0.11650921565277854,
+            "RandomForestRegressor": 0.0882348576789198,
+            "AdaBoostRegressor": 0.1427149587901301,
+            "GradientBoostingRegressor": 0.089248802504544,
+            "KNeighborsRegressor": 0.09489012065958173
+        },
+        "mre": {
+            "LinearRegression": 0.8842660513009049,
+            "Ridge": 0.883151210157634,
+            "Lasso": 1.3161998029144528,
+            "ElasticNet": 1.3161998029144528,
+            "BayesianRidge": 0.8669098368272907,
+            "SVR": 0.95799632819334,
+            "GaussianProcessRegressor": 3.037437255801338,
+            "DecisionTreeRegressor": 0.975035517751404,
+            "RandomForestRegressor": 0.769626128697443,
+            "AdaBoostRegressor": 1.6660925779864602,
+            "GradientBoostingRegressor": 0.7836627579056066,
+            "KNeighborsRegressor": 0.7894099912089432
+        }
+    },
+    "price": {
+        "mae": {
+            "LinearRegression": 242.02249021228286,
+            "Ridge": 241.60882309297872,
+            "Lasso": 237.4016268119122,
+            "ElasticNet": 273.4137238315552,
+            "BayesianRidge": 238.6465669259801,
+            "SVR": 455.4242824064346,
+            "GaussianProcessRegressor": 574.5214827398398,
+            "DecisionTreeRegressor": 232.32312930338375,
+            "RandomForestRegressor": 178.49668111563614,
+            "AdaBoostRegressor": 233.6352956459081,
+            "GradientBoostingRegressor": 187.8565821567941,
+            "KNeighborsRegressor": 295.12498942655236
+        },
+        "mre": {
+            "LinearRegression": 1.3803447240126312,
+            "Ridge": 1.3739228318982488,
+            "Lasso": 1.2723857663043248,
+            "ElasticNet": 1.9525389895917062,
+            "BayesianRidge": 1.3096008111089694,
+            "SVR": 1.9834021099283674,
+            "GaussianProcessRegressor": 1.2128099273511324,
+            "DecisionTreeRegressor": 1.0816750516488245,
+            "RandomForestRegressor": 0.9146509303276555,
+            "AdaBoostRegressor": 1.6472006111109014,
+            "GradientBoostingRegressor": 0.9275091914870208,
+            "KNeighborsRegressor": 2.3778345262636904
+        }
+    }
+}
