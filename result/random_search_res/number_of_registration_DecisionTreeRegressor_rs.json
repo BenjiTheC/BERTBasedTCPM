@@ -1,0 +1,8 @@
+{
+    "regressor": "DecisionTreeRegressor",
+    "best_params": {
+        "max_depth": 3,
+        "criterion": "mae"
+    },
+    "best_score_in_rs": -0.58723827389486
+}

@@ -5,13 +5,13 @@
         "SVR": 0.023379,
         "BayesianRidge": 0.025494
     },
-    "num_or_reg": {
+    "number_of_registration": {
         "RandomForestRegressor": 0.5675,
         "GradientBoostingRegressor": 0.57285,
         "SVR": 0.62309,
         "DecisionTreeRegressor": 0.670056
     },
-    "sub_ratio": {
+    "sub_reg_ratio": {
         "RandomForestRegressor": 0.769626,
         "GradientBoostingRegressor": 0.783663,
         "KNeighborsRegressor": 0.78941,

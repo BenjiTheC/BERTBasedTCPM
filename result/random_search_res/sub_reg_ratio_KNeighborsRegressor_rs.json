@@ -1,0 +1,10 @@
+{
+    "regressor": "KNeighborsRegressor",
+    "best_params": {
+        "weights": "distance",
+        "n_neighbors": 10,
+        "leaf_size": 30,
+        "algorithm": "kd_tree"
+    },
+    "best_score_in_rs": -0.8090088192788405
+}

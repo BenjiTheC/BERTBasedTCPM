@@ -1,0 +1,10 @@
+{
+    "regressor": "SVR",
+    "best_params": {
+        "kernel": "poly",
+        "degree": 5,
+        "coef0": 5,
+        "C": 100
+    },
+    "best_score_in_rs": -0.5633494007173228
+}

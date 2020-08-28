@@ -131,18 +131,18 @@ def random_serach_top_tiers():
             ),
         },
         'SVR': {
-            'fixed_args': dict(cache_size=1000),
+            'fixed_args': dict(cache_size=15000),
             'tuned_args': [
-                dict(kernel='rbf', gamma=['scale', 'auto'], tol=[1e-3, 1e-4, 1e-5, 2e-5], C=[1, 10, 100, 1000]),
-                dict(kernal='linear', tol=[1e-3, 1e-4, 1e-5, 2e-5], C=[1, 10, 100, 1000]),
-                dict(kernel='poly', degree=[2, 3, 5], coef0=[0, 0.5, 5, 50, 100], tol=[1e-3, 1e-4, 1e-5, 2e-5], C=[1, 10, 100, 1000]),
+                dict(kernel=['rbf'], gamma=['scale', 'auto'], C=[1, 10, 100, 1000]),
+                dict(kernel=['linear'], C=[1, 10, 100, 1000]),
+                dict(kernel=['poly'], degree=[2, 3, 5], coef0=[0, 0.5, 5, 50, 100], C=[1, 10, 100, 1000]),
             ],
         },
     }
 
     scoring = {
-        'mae': make_scorer(mean_absolute_error),
-        'mre': make_scorer(mre),
+        'mae': make_scorer(mean_absolute_error, greater_is_better=False),
+        'mre': make_scorer(mre, greater_is_better=False),
     }
 
     rs_path = os.path.join(os.curdir, 'result', 'random_search_res')
@@ -158,6 +158,11 @@ def random_serach_top_tiers():
 
         for reg_name in reg_lst:
             print(f'RS on {reg_name}...')
+
+            rs_res_path = os.path.join(rs_path, f'{target}_{reg_name}_rs.json')
+            if os.path.isfile(rs_res_path):
+                continue
+
             reg = model_dct[reg_name]
             args = model_args_dct[reg_name]
             
@@ -179,7 +184,7 @@ def random_serach_top_tiers():
                 'best_score_in_rs': rs.best_score_,
             }
 
-            with open(os.path.join(rs_path, f'{target}_{reg_name}_rs.json'), 'w') as f:
+            with open(rs_res_path, 'w') as f:
                 json.dump(rs_res, f, indent=4)
 
 def kfold_predict_validate_gradient_boosting(X: pd.DataFrame, y: pd.Series, cv=10, loss='ls', tol=0.01, n_iter_no_change=5):

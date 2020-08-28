@@ -1,0 +1,9 @@
+{
+    "regressor": "RandomForestRegressor",
+    "best_params": {
+        "n_estimators": 100,
+        "max_features": "auto",
+        "criterion": "mae"
+    },
+    "best_score_in_rs": -0.019716696068232398
+}

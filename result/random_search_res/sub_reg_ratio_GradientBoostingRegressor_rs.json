@@ -1,0 +1,10 @@
+{
+    "regressor": "GradientBoostingRegressor",
+    "best_params": {
+        "tol": 2e-05,
+        "n_estimators": 500,
+        "loss": "lad",
+        "learning_rate": 0.001
+    },
+    "best_score_in_rs": -0.7177619131325096
+}
