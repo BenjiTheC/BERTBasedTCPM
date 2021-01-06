@@ -1,6 +1,7 @@
 # Customized ignored
 .vscode/
 img/
+result/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
